@@ -1,0 +1,56 @@
+# AWS SAM テンプレート（Django Lambda用）
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  
+  ValuationApiUrl:
+    Type: String
+    Description: Valuation API endpoint URL
+
+Resources:
+  DjangoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "satei-django-${Environment}"
+      CodeUri: ../
+      Handler: lambda.django-lambda.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DJANGO_SETTINGS_MODULE: satei_project.settings
+          VALUATION_API_URL: !Ref ValuationApiUrl
+          DEBUG: "False"
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+
+Outputs:
+  DjangoApi:
+    Description: "API Gateway endpoint URL for Django application"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"

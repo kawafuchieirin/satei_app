@@ -1,0 +1,4 @@
+Django==4.2.7
+requests==2.31.0
+python-decouple==3.8
+mangum==0.17.0
