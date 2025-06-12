@@ -16,6 +16,10 @@ Parameters:
     AllowedValues:
       - dev
       - prod
+  
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the Lambda function
 
 Resources:
   ValuationApiFunction:
@@ -23,8 +27,12 @@ Resources:
     Properties:
       FunctionName: !Sub "satei-api-container-${Environment}"
       PackageType: Image
+      ImageUri: !Ref ImageUri
       Timeout: 30
       MemorySize: 1024
+      ImageConfig:
+        Command:
+          - lambda_main.lambda_handler
       Environment:
         Variables:
           PYTHONPATH: /var/task
@@ -39,10 +47,6 @@ Resources:
           Properties:
             Path: /
             Method: ANY
-    Metadata:
-      DockerTag: python3.11-v1
-      DockerContext: ../api
-      Dockerfile: Dockerfile.lambda
 
 Outputs:
   ValuationApi:

@@ -7,3 +7,7 @@ from main import app
 
 # Lambda用のハンドラー
 handler = Mangum(app, lifespan="off")
+
+# Lambda関数のエントリーポイント
+def lambda_handler(event, context):
+    return handler(event, context)

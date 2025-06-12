@@ -1,4 +1,5 @@
 {% extends 'valuation/base.html' %}
+{% load price_filters %}
 
 {% block title %}査定結果 - 不動産査定アプリ{% endblock %}
 
@@ -38,7 +39,7 @@
                         <div class="card bg-light">
                             <div class="card-body text-center">
                                 <h2 class="text-primary">
-                                    ¥{{ result.estimated_price|floatformat:0 }}
+                                    {{ result.estimated_price|format_price_yen }}
                                 </h2>
                                 <p class="mb-0">推定査定額</p>
                             </div>
@@ -55,7 +56,7 @@
                         {% if result.price_range %}
                         <div class="mt-2">
                             <small class="text-muted">
-                                予想価格帯: ¥{{ result.price_range.min|floatformat:0 }} - ¥{{ result.price_range.max|floatformat:0 }}
+                                予想価格帯: {{ result.price_range.min|format_price_yen }} - {{ result.price_range.max|format_price_yen }}
                             </small>
                         </div>
                         {% endif %}
