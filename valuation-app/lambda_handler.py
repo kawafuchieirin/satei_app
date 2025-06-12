@@ -8,14 +8,14 @@ sys.path.insert(0, '/var/task')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'satei_project.settings')
 
 import django
-from django.core.wsgi import get_wsgi_application
+from django.core.asgi import get_asgi_application
 from mangum import Mangum
 
 # Djangoの初期化
 django.setup()
 
-# WSGIアプリケーション
-django_app = get_wsgi_application()
+# ASGIアプリケーション（Mangum用）
+django_app = get_asgi_application()
 
 # Mangumでラップ
 handler = Mangum(django_app, lifespan="off")

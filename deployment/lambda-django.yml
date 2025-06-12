@@ -19,7 +19,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "satei-django-${Environment}"
-      CodeUri: .
+      CodeUri: ..
       Handler: lambda_handler.lambda_handler
       Runtime: python3.11
       Timeout: 30

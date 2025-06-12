@@ -1,1 +1,0 @@
-arn:aws:lambda:ap-northeast-1:412420079063:layer:satei-python-dependencies:1
