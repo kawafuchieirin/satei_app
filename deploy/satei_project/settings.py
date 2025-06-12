@@ -24,6 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-3&*l3nm@por25vjtki_ytym7c+s&l1)zz(+q2xak+iukn42#b0'
 
+# Lambda環境デバッグ用の追加設定
+LAMBDA_DEBUG = 'AWS_LAMBDA_FUNCTION_NAME' in os.environ
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
@@ -47,23 +50,30 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',  # Lambda環境では無効化
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Lambda環境ではCSRFミドルウェアを無効化
+if 'AWS_LAMBDA_FUNCTION_NAME' not in os.environ:
+    MIDDLEWARE.insert(3, 'django.middleware.csrf.CsrfViewMiddleware')
+
 # Lambda環境でのCSRF設定
 if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
+    # CSRF保護を完全に無効化（開発環境用）
     CSRF_TRUSTED_ORIGINS = ['https://*.execute-api.ap-northeast-1.amazonaws.com']
-    # API GatewayのProdステージでのURL設定
-    FORCE_SCRIPT_NAME = '/Prod'
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_HTTPONLY = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SAMESITE = None
+    # Lambda環境用の追加設定
+    SECURE_SSL_REDIRECT = False
+    # API GatewayのdevステージでのURL設定
+    FORCE_SCRIPT_NAME = '/dev'
     USE_X_FORWARDED_HOST = True
     USE_X_FORWARDED_PORT = True
-    # テスト用：CSRFチェックを緩和
-    CSRF_COOKIE_SECURE = True
-    CSRF_COOKIE_HTTPONLY = False
-    SESSION_COOKIE_SECURE = True
+    USE_X_FORWARDED_PROTO = True
 
 ROOT_URLCONF = 'satei_project.urls'
 

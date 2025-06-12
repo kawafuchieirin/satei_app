@@ -1,6 +1,13 @@
-# AWS SAM テンプレート（Django Lambda用）
+# AWS SAM テンプレート（FastAPI Lambda Container用）
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 
 Parameters:
   Environment:
@@ -9,27 +16,18 @@ Parameters:
     AllowedValues:
       - dev
       - prod
-  
-  ValuationApiUrl:
-    Type: String
-    Description: Valuation API endpoint URL
 
 Resources:
-  DjangoFunction:
+  ValuationApiFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "satei-django-${Environment}"
-      CodeUri: .
-      Handler: lambda_handler.lambda_handler
-      Runtime: python3.11
+      FunctionName: !Sub "satei-api-container-${Environment}"
+      PackageType: Image
       Timeout: 30
       MemorySize: 1024
       Environment:
         Variables:
-          DJANGO_SETTINGS_MODULE: satei_project.settings
-          VALUATION_API_URL: !Ref ValuationApiUrl
-          DEBUG: "False"
-          PYTHONPATH: "/var/task"
+          PYTHONPATH: /var/task
       Events:
         Api:
           Type: Api
@@ -41,9 +39,12 @@ Resources:
           Properties:
             Path: /
             Method: ANY
-
+    Metadata:
+      DockerTag: python3.11-v1
+      DockerContext: ../api
+      Dockerfile: Dockerfile.lambda
 
 Outputs:
-  DjangoApi:
-    Description: "API Gateway endpoint URL for Django application"
+  ValuationApi:
+    Description: "API Gateway endpoint URL for Valuation API"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

@@ -1,6 +1,6 @@
 services:
   django:
-    build: .
+    build: ..
     ports:
       - "8080:8080"
     environment:
@@ -9,15 +9,16 @@ services:
     depends_on:
       - api
     volumes:
-      - .:/app
+      - ..:/app
+    working_dir: /app
     command: python manage.py runserver 0.0.0.0:8080
 
   api:
-    build: ./api
+    build: ../api
     ports:
       - "8000:8000"
     volumes:
-      - ./api:/app
+      - ../api:/app
+    working_dir: /app
     environment:
       - PYTHONPATH=/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

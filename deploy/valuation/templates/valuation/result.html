@@ -1,0 +1,84 @@
+{% extends 'valuation/base.html' %}
+
+{% block title %}査定結果 - 不動産査定アプリ{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">
+                <h3>査定結果</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>物件情報</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>所在地</th>
+                                <td>{{ valuation_data.prefecture }} {{ valuation_data.city }} {{ valuation_data.district }}</td>
+                            </tr>
+                            <tr>
+                                <th>土地面積</th>
+                                <td>{{ valuation_data.land_area }}㎡</td>
+                            </tr>
+                            <tr>
+                                <th>建物面積</th>
+                                <td>{{ valuation_data.building_area }}㎡</td>
+                            </tr>
+                            <tr>
+                                <th>築年数</th>
+                                <td>{{ valuation_data.building_age }}年</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5>査定結果</h5>
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h2 class="text-primary">
+                                    ¥{{ result.estimated_price|floatformat:0 }}
+                                </h2>
+                                <p class="mb-0">推定査定額</p>
+                            </div>
+                        </div>
+                        
+                        {% if result.confidence %}
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                信頼度: {{ result.confidence|floatformat:1 }}%
+                            </small>
+                        </div>
+                        {% endif %}
+                        
+                        {% if result.price_range %}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                予想価格帯: ¥{{ result.price_range.min|floatformat:0 }} - ¥{{ result.price_range.max|floatformat:0 }}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if result.factors %}
+                <div class="mt-4">
+                    <h6>査定要因</h6>
+                    <ul class="list-unstyled">
+                        {% for factor in result.factors %}
+                        <li class="small text-muted">• {{ factor }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <a href="{% url 'valuation:form' %}" class="btn btn-primary">再査定する</a>
+                    <a href="{% url 'valuation:index' %}" class="btn btn-secondary">ホームに戻る</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
