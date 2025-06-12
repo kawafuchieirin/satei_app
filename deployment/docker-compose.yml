@@ -1,6 +1,10 @@
+version: '3.8'
+
 services:
   django:
-    build: ..
+    build: 
+      context: ../valuation-app
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -9,16 +13,19 @@ services:
     depends_on:
       - api
     volumes:
-      - ..:/app
+      - ../valuation-app:/app
     working_dir: /app
     command: python manage.py runserver 0.0.0.0:8080
 
   api:
-    build: ../api
+    build: 
+      context: ../valuation-api
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ../api:/app
+      - ../valuation-api:/app
     working_dir: /app
     environment:
       - PYTHONPATH=/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
