@@ -1,12 +1,40 @@
-# 不動産査定アプリ
+# 不動産査定アプリケーション
 
 不動産の基本情報を入力して、機械学習モデルによる査定額を取得できるWebアプリケーションです。
+
+## 📁 ディレクトリ構成
+
+プロジェクトは以下の4つの主要カテゴリに整理されています：
+
+### 1. **deployment/** - デプロイ
+AWS へのデプロイに必要なすべてのファイル
+- SAM テンプレート（Lambda設定）
+- デプロイスクリプト  
+- Docker 設定
+
+### 2. **valuation-api/** - 査定API
+FastAPI ベースの ML バックエンドサービス
+- 機械学習モデルによる価格予測
+- RESTful API エンドポイント
+- Lambda 対応
+
+### 3. **valuation-app/** - 査定アプリ
+Django ベースのフロントエンドアプリケーション
+- ユーザーインターフェース
+- フォーム処理
+- API 連携
+
+### 4. **model-creation/** - モデル作成
+ML モデルの作成・管理ツール
+- モデル学習スクリプト
+- データ処理
+- 評価ツール
 
 ## 🌐 デプロイ済みアプリケーション
 
 **現在の本番環境**：
-- **Webアプリケーション**: https://a2evu7tm1a.execute-api.ap-northeast-1.amazonaws.com/Prod/
-- **査定API**: https://s97f0cugki.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **Webアプリケーション**: https://w87iwps1jk.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **査定API**: 未デプロイ（ECRデプロイが必要）
 
 ## 概要
 
@@ -46,7 +74,7 @@
 
 ### Webアプリケーション
 
-1. **アクセス**: https://a2evu7tm1a.execute-api.ap-northeast-1.amazonaws.com/Prod/
+1. **アクセス**: https://w87iwps1jk.execute-api.ap-northeast-1.amazonaws.com/Prod/
 2. **査定開始**: 「査定を開始する」ボタンをクリック
 3. **情報入力**:
    - 都道府県（例：東京都）
@@ -61,15 +89,16 @@
 ### API直接利用
 
 ```bash
-curl -X POST "https://s97f0cugki.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation" \
+# 注意: 現在APIは未デプロイのため、デプロイ後にURLを更新してください
+curl -X POST "https://<api-id>.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation" \
   -H "Content-Type: application/json" \
   -d '{
     "prefecture": "東京都",
     "city": "渋谷区",
-    "area": "恵比寿",
+    "district": "恵比寿",
     "land_area": 100.0,
     "building_area": 80.0,
-    "age": 10
+    "building_age": 10
   }'
 ```
 
@@ -83,50 +112,12 @@ git clone <repository-url>
 cd satei_app
 
 # Docker Composeで起動
+cd deployment
 docker-compose up --build
 
 # アクセス
 # フロントエンド: http://localhost:8080
 # API: http://localhost:8000
-```
-
-### 個別に実行
-
-#### Django フロントエンド
-
-```bash
-# 依存関係のインストール
-pip install -r requirements.txt
-
-# データベースマイグレーション
-python manage.py migrate
-
-# 開発サーバー起動
-python manage.py runserver 0.0.0.0:8080
-```
-
-#### FastAPI バックエンド
-
-```bash
-cd api
-
-# 依存関係のインストール
-pip install -r requirements.txt
-
-# APIサーバー起動
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-## 設定
-
-### 環境変数
-
-`.env` ファイルを作成して以下の設定を行ってください：
-
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key
-VALUATION_API_URL=http://localhost:8000
 ```
 
 ## 🚀 AWS Lambda デプロイ
@@ -137,27 +128,39 @@ VALUATION_API_URL=http://localhost:8000
 - SAM CLI のインストール
 - Docker のインストール
 
-### 簡単デプロイ（推奨）
+### デプロイ方法
+
+#### Django フロントエンド（ZIP デプロイ）
 
 ```bash
-# 両方同時デプロイ
-./deploy_all.sh both dev
-
-# 個別デプロイ
-./deploy_all.sh django dev    # Djangoのみ
-./deploy_all.sh api dev       # FastAPIのみ
+cd deployment
+sam build -t lambda-django.yml
+sam deploy --template-file .aws-sam/build/template.yaml \
+  --stack-name satei-django-dev \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides Environment=dev \
+  ValuationApiUrl=https://<api-id>.execute-api.ap-northeast-1.amazonaws.com/Prod \
+  --resolve-s3
 ```
 
-### 手動デプロイ
+#### FastAPI バックエンド（ECR デプロイ - 推奨）
+
+MLライブラリのサイズが大きいため、ECRコンテナデプロイを使用：
 
 ```bash
-# Django アプリケーション
-sam build --template-file deploy/lambda-django.yml
-sam deploy --template-file deploy/lambda-django.yml --stack-name satei-django
+cd deployment
+./ecr-deploy.sh api dev
+```
 
-# FastAPI アプリケーション
-sam build --template-file deploy/lambda-api.yml
-sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
+#### 統合デプロイスクリプト
+
+```bash
+cd deployment
+# ECRでAPIをデプロイ
+./deploy_unified.sh ecr api dev
+
+# 通常のZIPデプロイ（ML依存関係なし）
+./deploy_unified.sh aws django dev
 ```
 
 ## 📊 API仕様
@@ -171,10 +174,10 @@ sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
 {
   "prefecture": "東京都",
   "city": "渋谷区",
-  "area": "恵比寿",
+  "district": "渋谷1-1-1",
   "land_area": 100.0,
   "building_area": 80.0,
-  "age": 10
+  "building_age": 10
 }
 ```
 
@@ -208,30 +211,6 @@ sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
 - **評価指標**: MAE (Mean Absolute Error), R² Score
 - **現在の状態**: モックデータでのデモンストレーション
 
-## 📁 ディレクトリ構造
-
-```
-satei_app/
-├── 📁 satei_project/          # Django プロジェクト設定
-│   ├── settings.py             # Lambda環境対応設定
-│   └── urls.py                 # メインURLルーティング
-├── 📁 valuation/              # Django アプリケーション
-│   ├── 📁 templates/          # HTMLテンプレート
-│   ├── forms.py               # フォーム定義
-│   └── views.py               # ビューロジック（API連携含む）
-├── 📁 api/                   # FastAPI アプリケーション
-│   ├── 📁 models/            # MLモデルとデータ処理
-│   ├── main.py               # FastAPI メイン
-│   └── lambda_main.py        # Lambda ハンドラー
-├── 📁 deploy/               # AWS デプロイ設定
-│   ├── lambda-django.yml      # Django Lambda SAMテンプレート
-│   └── lambda-api.yml         # FastAPI Lambda SAMテンプレート
-├── 📁 scripts/              # MLモデル管理スクリプト
-├── deploy_all.sh             # 統合デプロイスクリプト
-├── docker-compose.yml        # Docker Compose 設定
-└── requirements.txt          # Python依存関係
-```
-
 ## 免責事項
 
 本査定結果は参考値であり、実際の不動産価値を保証するものではありません。実際の売買価格は市場状況、物件の状態、立地条件等により変動する可能性があります。正確な査定については、不動産専門業者にご相談ください。
@@ -240,76 +219,3 @@ satei_app/
 
 MIT License
 
-## 🛠️ 開発者向け情報
-
-### ローカル開発コマンド
-
-```bash
-# Django開発サーバー
-python manage.py runserver
-
-# FastAPI開発サーバー
-cd api && uvicorn main:app --reload
-
-# MLモデル作成
-python scripts/create_model.py
-
-# モデル評価
-python test_model_accuracy.py
-```
-
-### AWSデプロイコマンド
-
-```bash
-# 統合デプロイ
-./deploy_all.sh both dev
-
-# 個別デプロイ
-./deploy_all.sh django dev
-./deploy_all.sh api dev
-```
-
-### Django設定ファイルのポイント
-
-```python
-# Lambda環境でのCSRF設定
-if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
-    CSRF_TRUSTED_ORIGINS = ['https://*.execute-api.ap-northeast-1.amazonaws.com']
-    FORCE_SCRIPT_NAME = '/Prod'  # API GatewayのProdステージ対応
-```
-
-## 🔧 トラブルシューティング
-
-### よくある問題と解決方法
-
-1. **API呼び出し失敗**
-   - DjangoかFastAPIへの通信エラー
-   - `valuation/views.py` でAPI URLを確認
-   - CSRFトークンの設定を確認
-
-2. **"{"message":"Forbidden"}"エラー**
-   - DjangoのURLルーティング問題
-   - `settings.py` の `FORCE_SCRIPT_NAME` 設定を確認
-   - API GatewayのProdステージパスの不一致
-
-3. **Lambdaデプロイエラー**
-   - パッケージサイズが250MBを超えた場合
-   - MLライブラリを除いた軽量版requirements.txtを使用
-
-4. **フォームデータが送信されない**
-   - DjangoとFastAPI間のフィールド名不一致
-   - `views.py` でフィールドマッピングを確認してください
-
-### 現在のデプロイ状態
-
-- ✅ Django フロントエンド: 正常動作
-- ✅ FastAPI バックエンド: 正常動作
-- ✅ 査定機能: モックデータで動作中
-- ✅ フォーム統合: 正常動作
-
-### サポート
-
-問題が発生した場合は、以下の情報を含めて報告してください：
-- エラーメッセージの全文
-- 発生時の操作手順
-- ブラウザのコンソールログ

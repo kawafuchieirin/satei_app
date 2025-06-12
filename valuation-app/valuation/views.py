@@ -14,10 +14,10 @@ def valuation_form(request):
                 valuation_data = {
                     'prefecture': form.cleaned_data['prefecture'],
                     'city': form.cleaned_data['city'],
-                    'area': form.cleaned_data['district'],  # FastAPI expects 'area'
+                    'district': form.cleaned_data['district'],  # FastAPI expects 'district'
                     'land_area': form.cleaned_data['land_area'],
                     'building_area': form.cleaned_data['building_area'],
-                    'age': form.cleaned_data['building_age']  # FastAPI expects 'age'
+                    'building_age': form.cleaned_data['building_age']  # FastAPI expects 'building_age'
                 }
                 
                 response = requests.post(
@@ -65,10 +65,10 @@ def test_api(request):
         test_data = {
             'prefecture': '東京都',
             'city': '新宿区',
-            'area': '西新宿',
+            'district': '西新宿',
             'land_area': 100.0,
             'building_area': 80.0,
-            'age': 5
+            'building_age': 5
         }
         
         api_url = f"{settings.VALUATION_API_URL}/api/valuation"

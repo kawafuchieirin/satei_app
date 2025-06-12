@@ -103,7 +103,7 @@ deploy_django() {
         API_URL="${API_GATEWAY_URL:-https://api-placeholder.execute-api.ap-northeast-1.amazonaws.com}"
     fi
     
-    sam build -t lambda-django.yml
+    sam build -t deploy/lambda-django.yml
     sam deploy \
         --template-file .aws-sam/build/template.yaml \
         --stack-name "satei-django-${env}" \

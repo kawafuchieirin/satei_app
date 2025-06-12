@@ -29,6 +29,31 @@
                                 {{ form.city.label }}
                             </label>
                             {{ form.city }}
+                            <datalist id="tokyo-wards">
+                                <option value="千代田区">
+                                <option value="中央区">
+                                <option value="港区">
+                                <option value="新宿区">
+                                <option value="文京区">
+                                <option value="台東区">
+                                <option value="墨田区">
+                                <option value="江東区">
+                                <option value="品川区">
+                                <option value="目黒区">
+                                <option value="大田区">
+                                <option value="世田谷区">
+                                <option value="渋谷区">
+                                <option value="中野区">
+                                <option value="杉並区">
+                                <option value="豊島区">
+                                <option value="北区">
+                                <option value="荒川区">
+                                <option value="板橋区">
+                                <option value="練馬区">
+                                <option value="足立区">
+                                <option value="葛飾区">
+                                <option value="江戸川区">
+                            </datalist>
                             {% if form.city.errors %}
                                 <div class="text-danger small">{{ form.city.errors.0 }}</div>
                             {% endif %}
