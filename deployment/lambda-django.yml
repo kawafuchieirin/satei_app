@@ -13,6 +13,7 @@ Parameters:
   ValuationApiUrl:
     Type: String
     Description: Valuation API endpoint URL
+    Default: "https://example.com"
 
 Resources:
   DjangoFunction:
@@ -24,6 +25,8 @@ Resources:
       Runtime: python3.11
       Timeout: 30
       MemorySize: 1024
+      Layers:
+        - arn:aws:lambda:ap-northeast-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:68
       Environment:
         Variables:
           DJANGO_SETTINGS_MODULE: satei_project.settings

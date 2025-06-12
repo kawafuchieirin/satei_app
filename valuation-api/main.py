@@ -5,11 +5,18 @@ import logging
 from typing import Optional, List, Dict
 import os
 
-from models.valuation_model import ValuationModel
-from models.model_evaluator import ModelEvaluator
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ML依存関係のチェック
+try:
+    from models.valuation_model import ValuationModel
+    from models.model_evaluator import ModelEvaluator
+    ML_AVAILABLE = True
+except ImportError:
+    logger.warning("ML dependencies not available. Using lightweight model.")
+    from models.lightweight_model import LightweightValuationModel
+    ML_AVAILABLE = False
 
 app = FastAPI(
     title="Real Estate Valuation API",
@@ -25,8 +32,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-valuation_model = ValuationModel()
-model_evaluator = None  # Lazy loading for evaluation
+# モデルの初期化
+if ML_AVAILABLE:
+    valuation_model = ValuationModel()
+    model_evaluator = None  # Lazy loading for evaluation
+else:
+    valuation_model = LightweightValuationModel()
+    model_evaluator = None
 
 
 class PropertyData(BaseModel):
