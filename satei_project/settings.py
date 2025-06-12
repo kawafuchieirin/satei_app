@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 from decouple import config
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-3&*l3nm@por25vjtki_ytym7c+s&l1)zz(+q2xak+iukn42#b0'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
+# Lambda環境用の設定
+ALLOWED_HOSTS = ['*']  # Lambda + API Gateway用
 
 
 # Application definition
@@ -50,6 +52,18 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Lambda環境でのCSRF設定
+if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
+    CSRF_TRUSTED_ORIGINS = ['https://*.execute-api.ap-northeast-1.amazonaws.com']
+    # API GatewayのProdステージでのURL設定
+    FORCE_SCRIPT_NAME = '/Prod'
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
+    # テスト用：CSRFチェックを緩和
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = False
+    SESSION_COOKIE_SECURE = True
 
 ROOT_URLCONF = 'satei_project.urls'
 

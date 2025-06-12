@@ -2,6 +2,12 @@
 
 不動産の基本情報を入力して、機械学習モデルによる査定額を取得できるWebアプリケーションです。
 
+## 🌐 デプロイ済みアプリケーション
+
+**現在の本番環境**：
+- **Webアプリケーション**: https://a2evu7tm1a.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **査定API**: https://s97f0cugki.execute-api.ap-northeast-1.amazonaws.com/Prod/
+
 ## 概要
 
 このアプリケーションは以下の構成になっています：
@@ -9,11 +15,11 @@
 - **フロントエンド**: Django（ユーザーインターフェース）
 - **バックエンド**: FastAPI（査定API）
 - **機械学習**: scikit-learn（不動産価格予測モデル）
-- **データソース**: 国土交通省 不動産取引価格情報API
+- **デプロイ**: AWS Lambda + API Gateway
 
 ## 機能
 
-- 物件の基本情報入力（所在地、面積、築年数など）
+- 物件の基本情報入力（都道府県、市区町村、地区、土地面積、建物面積、築年数）
 - 機械学習モデルによる査定価格予測
 - 査定結果の信頼度表示
 - 査定要因の分析表示
@@ -23,11 +29,11 @@
 ```
 [ユーザー] 
     ↓
-[Django Frontend (port 8080)]
-    ↓ HTTP Request
-[FastAPI Backend (port 8000)]
+[Django Frontend - AWS Lambda]
+    ↓ HTTP Request  
+[FastAPI Backend - AWS Lambda]
     ↓
-[ML Model + MLIT Data]
+[ML Model + Mock Data]
 ```
 
 ## 必要な環境
@@ -36,9 +42,40 @@
 - Docker & Docker Compose（推奨）
 - AWS CLI（デプロイ時）
 
+## 📱 アプリケーションの使い方
+
+### Webアプリケーション
+
+1. **アクセス**: https://a2evu7tm1a.execute-api.ap-northeast-1.amazonaws.com/Prod/
+2. **査定開始**: 「査定を開始する」ボタンをクリック
+3. **情報入力**:
+   - 都道府県（例：東京都）
+   - 市区町村（例：渋谷区）
+   - 地区名（例：恵比寿）
+   - 土地面積（㎡）
+   - 建物面積（㎡）
+   - 築年数（年）
+4. **査定実行**: 「査定を実行」ボタンをクリック
+5. **結果確認**: 査定価格、信頼度、価格帯、査定要因を確認
+
+### API直接利用
+
+```bash
+curl -X POST "https://s97f0cugki.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prefecture": "東京都",
+    "city": "渋谷区",
+    "area": "恵比寿",
+    "land_area": 100.0,
+    "building_area": 80.0,
+    "age": 10
+  }'
+```
+
 ## ローカル環境での実行
 
-### 1. Docker Composeを使用（推奨）
+### Docker Composeを使用（推奨）
 
 ```bash
 # リポジトリをクローン
@@ -49,11 +86,11 @@ cd satei_app
 docker-compose up --build
 
 # アクセス
-# フロントエンド: http://localhost:3000
-# API: http://localhost:3001
+# フロントエンド: http://localhost:8080
+# API: http://localhost:8000
 ```
 
-### 2. 個別に実行
+### 個別に実行
 
 #### Django フロントエンド
 
@@ -92,32 +129,38 @@ SECRET_KEY=your-secret-key
 VALUATION_API_URL=http://localhost:8000
 ```
 
-## AWS Lambda デプロイ
+## 🚀 AWS Lambda デプロイ
 
 ### 前提条件
 
 - AWS CLI の設定
 - SAM CLI のインストール
-- ECR リポジトリの作成権限
+- Docker のインストール
 
-### ECR デプロイ
+### 簡単デプロイ（推奨）
 
 ```bash
-# ECRにDockerイメージをデプロイ
-./deploy/ecr-deploy.sh
+# 両方同時デプロイ
+./deploy_all.sh both dev
+
+# 個別デプロイ
+./deploy_all.sh django dev    # Djangoのみ
+./deploy_all.sh api dev       # FastAPIのみ
 ```
 
-### Lambda関数デプロイ
+### 手動デプロイ
 
 ```bash
 # Django アプリケーション
+sam build --template-file deploy/lambda-django.yml
 sam deploy --template-file deploy/lambda-django.yml --stack-name satei-django
 
 # FastAPI アプリケーション
+sam build --template-file deploy/lambda-api.yml
 sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
 ```
 
-## API仕様
+## 📊 API仕様
 
 ### 査定API
 
@@ -128,10 +171,10 @@ sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
 {
   "prefecture": "東京都",
   "city": "渋谷区",
-  "district": "恵比寿",
+  "area": "恵比寿",
   "land_area": 100.0,
   "building_area": 80.0,
-  "building_age": 10
+  "age": 10
 }
 ```
 
@@ -151,35 +194,42 @@ sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api
 }
 ```
 
-## データソース
+## 📊 データソース
 
-本アプリケーションは国土交通省の不動産取引価格情報を使用しています：
+**現在のデータソース**:
+- モックデータを使用したデモンストレーション
+- 実用版では国土交通省の不動産取引価格情報API を使用予定
 - API: https://www.reinfolib.mlit.go.jp/help/apiManual/
-- データ期間: 直近3年間の取引データ
 
-## 機械学習モデル
+## 🤖 機械学習モデル
 
 - **アルゴリズム**: Random Forest Regressor
 - **特徴量**: 都道府県、市区町村、地区、土地面積、建物面積、築年数
 - **評価指標**: MAE (Mean Absolute Error), R² Score
+- **現在の状態**: モックデータでのデモンストレーション
 
-## ディレクトリ構造
+## 📁 ディレクトリ構造
 
 ```
 satei_app/
-├── satei_project/          # Django プロジェクト設定
-├── valuation/              # Django アプリケーション
-│   ├── templates/          # HTMLテンプレート
-│   ├── forms.py           # フォーム定義
-│   └── views.py           # ビュー関数
-├── api/                   # FastAPI アプリケーション
-│   ├── models/            # MLモデルとデータ処理
-│   ├── main.py           # FastAPI メイン
-│   └── lambda_main.py    # Lambda ハンドラー
-├── lambda/               # Lambda 設定
-├── deploy/               # デプロイ設定
-├── docker-compose.yml    # Docker Compose 設定
-└── README.md
+├── 📁 satei_project/          # Django プロジェクト設定
+│   ├── settings.py             # Lambda環境対応設定
+│   └── urls.py                 # メインURLルーティング
+├── 📁 valuation/              # Django アプリケーション
+│   ├── 📁 templates/          # HTMLテンプレート
+│   ├── forms.py               # フォーム定義
+│   └── views.py               # ビューロジック（API連携含む）
+├── 📁 api/                   # FastAPI アプリケーション
+│   ├── 📁 models/            # MLモデルとデータ処理
+│   ├── main.py               # FastAPI メイン
+│   └── lambda_main.py        # Lambda ハンドラー
+├── 📁 deploy/               # AWS デプロイ設定
+│   ├── lambda-django.yml      # Django Lambda SAMテンプレート
+│   └── lambda-api.yml         # FastAPI Lambda SAMテンプレート
+├── 📁 scripts/              # MLモデル管理スクリプト
+├── deploy_all.sh             # 統合デプロイスクリプト
+├── docker-compose.yml        # Docker Compose 設定
+└── requirements.txt          # Python依存関係
 ```
 
 ## 免責事項
@@ -190,45 +240,76 @@ satei_app/
 
 MIT License
 
-## 開発者向け情報
+## 🛠️ 開発者向け情報
 
-### テスト実行
-
-```bash
-# Django テスト
-python manage.py test
-
-# FastAPI テスト
-cd api
-pytest
-```
-
-### コード品質チェック
+### ローカル開発コマンド
 
 ```bash
-# flake8
-flake8 .
+# Django開発サーバー
+python manage.py runserver
 
-# black (コードフォーマット)
-black .
+# FastAPI開発サーバー
+cd api && uvicorn main:app --reload
+
+# MLモデル作成
+python scripts/create_model.py
+
+# モデル評価
+python test_model_accuracy.py
 ```
 
-## トラブルシューティング
+### AWSデプロイコマンド
 
-### よくある問題
+```bash
+# 統合デプロイ
+./deploy_all.sh both dev
 
-1. **APIとの通信エラー**
-   - FastAPIサーバーが起動しているか確認
-   - ファイアウォール設定を確認
+# 個別デプロイ
+./deploy_all.sh django dev
+./deploy_all.sh api dev
+```
 
-2. **モデル学習エラー**
-   - MLIT APIへのアクセスができない場合、サンプルデータが使用されます
-   - インターネット接続を確認
+### Django設定ファイルのポイント
 
-3. **Docker起動エラー**
-   - Dockerが起動しているか確認
-   - ポート8000, 8080が使用されていないか確認
+```python
+# Lambda環境でのCSRF設定
+if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
+    CSRF_TRUSTED_ORIGINS = ['https://*.execute-api.ap-northeast-1.amazonaws.com']
+    FORCE_SCRIPT_NAME = '/Prod'  # API GatewayのProdステージ対応
+```
+
+## 🔧 トラブルシューティング
+
+### よくある問題と解決方法
+
+1. **API呼び出し失敗**
+   - DjangoかFastAPIへの通信エラー
+   - `valuation/views.py` でAPI URLを確認
+   - CSRFトークンの設定を確認
+
+2. **"{"message":"Forbidden"}"エラー**
+   - DjangoのURLルーティング問題
+   - `settings.py` の `FORCE_SCRIPT_NAME` 設定を確認
+   - API GatewayのProdステージパスの不一致
+
+3. **Lambdaデプロイエラー**
+   - パッケージサイズが250MBを超えた場合
+   - MLライブラリを除いた軽量版requirements.txtを使用
+
+4. **フォームデータが送信されない**
+   - DjangoとFastAPI間のフィールド名不一致
+   - `views.py` でフィールドマッピングを確認してください
+
+### 現在のデプロイ状態
+
+- ✅ Django フロントエンド: 正常動作
+- ✅ FastAPI バックエンド: 正常動作
+- ✅ 査定機能: モックデータで動作中
+- ✅ フォーム統合: 正常動作
 
 ### サポート
 
-問題が発生した場合は、GitHubのIssuesページで報告してください。
+問題が発生した場合は、以下の情報を含めて報告してください：
+- エラーメッセージの全文
+- 発生時の操作手順
+- ブラウザのコンソールログ

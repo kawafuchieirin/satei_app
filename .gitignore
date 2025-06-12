@@ -42,7 +42,16 @@ staticfiles/
 
 # AWS
 .aws/
+.aws-sam/
 samconfig.toml
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+test_*.json
+response.json
+/tmp/
 
 # ML Models
 *.pkl
