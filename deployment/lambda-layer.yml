@@ -1,0 +1,64 @@
+# AWS SAM テンプレート（Lambda Layer付きMLモデル）
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+Resources:
+  # ML依存関係用のLambda Layer
+  MLDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "ml-dependencies-${Environment}"
+      Description: "Machine Learning dependencies (pandas, scikit-learn, numpy, joblib)"
+      ContentUri: ../layer-ml-deps/
+      CompatibleRuntimes:
+        - python3.11
+      RetentionPolicy: Retain
+
+  ValuationApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "satei-api-ml-${Environment}"
+      CodeUri: ../valuation-api-ml
+      Handler: lambda_main.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 1024
+      Layers:
+        - !Ref MLDependenciesLayer
+      Environment:
+        Variables:
+          PYTHONPATH: /var/task:/opt/python
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+
+Outputs:
+  ValuationApi:
+    Description: "API Gateway endpoint URL for ML Valuation API"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  LayerArn:
+    Description: "ML Dependencies Layer ARN"
+    Value: !Ref MLDependenciesLayer

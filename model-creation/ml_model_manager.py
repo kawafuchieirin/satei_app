@@ -46,10 +46,10 @@ class MLModelManager:
         logger.info("Starting data collection from MLIT API...")
         
         # APIキーの確認
-        api_key = os.getenv('MLIT_API_KEY')
+        api_key = os.getenv('ESTATE_API_KEY')
         if not api_key:
-            logger.warning("MLIT_API_KEY not found in environment variables")
-            logger.info("Please set MLIT_API_KEY to fetch real data")
+            logger.warning("ESTATE_API_KEY not found in environment variables")
+            logger.info("Please set ESTATE_API_KEY to fetch real data")
             logger.info("Continuing with sample data generation...")
         
         fetcher = Tokyo23DataFetcher(api_key=api_key)

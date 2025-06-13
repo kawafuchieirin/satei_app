@@ -36,32 +36,52 @@ class RealEstateDataPreprocessor:
         # 必要な列の確認と作成
         features = pd.DataFrame()
         
-        # 基本情報
-        features['都道府県'] = '東京都'  # 東京23区のデータなので固定
-        features['市区町村'] = df['区'] if '区' in df.columns else df.get('市区町村名', '')
-        features['地区名'] = df.get('地区名', '').fillna('不明')
+        # 基本情報 - サンプルデータの列名に合わせて修正
+        features['都道府県'] = df.get('prefecture', '東京都').fillna('東京都')
+        features['市区町村'] = df.get('city', '').fillna('')
+        features['地区名'] = df.get('district', '').fillna('不明')
         
-        # 数値特徴量
-        features['土地面積'] = df.get('土地面積', df.get('面積（㎡）', 0)).fillna(0)
-        features['建物面積'] = df.get('建物面積', df.get('延床面積（㎡）', 0)).fillna(0)
-        features['築年数'] = df.get('築年数', 0).fillna(0)
+        # 数値特徴量 - サンプルデータの列名に合わせて修正
+        features['土地面積'] = pd.to_numeric(df.get('land_area', 0), errors='coerce').fillna(0)
+        features['建物面積'] = pd.to_numeric(df.get('building_area', 0), errors='coerce').fillna(0)
+        features['築年数'] = pd.to_numeric(df.get('building_age', 0), errors='coerce').fillna(0)
         
-        # 建ぺい率・容積率
-        features['建ぺい率（％）'] = df.get('建ぺい率（％）', 60).fillna(60)
-        features['容積率（％）'] = df.get('容積率（％）', 200).fillna(200)
+        # 建ぺい率・容積率（サンプルデータにない場合はデフォルト値）
+        if '建ぺい率（％）' in df.columns:
+            features['建ぺい率（％）'] = pd.to_numeric(df['建ぺい率（％）'], errors='coerce').fillna(60)
+        else:
+            features['建ぺい率（％）'] = 60
         
-        # 建物構造
-        features['建物の構造'] = df.get('建物の構造', 'RC').fillna('RC')
-        features['用途'] = df.get('用途', '住宅').fillna('住宅')
+        if '容積率（％）' in df.columns:
+            features['容積率（％）'] = pd.to_numeric(df['容積率（％）'], errors='coerce').fillna(200)
+        else:
+            features['容積率（％）'] = 200
         
-        # 道路情報
-        features['前面道路幅員'] = df.get('前面道路：幅員（ｍ）', 4.0).fillna(4.0)
+        # 建物構造（サンプルデータにない場合はデフォルト値）
+        if '建物の構造' in df.columns:
+            features['建物の構造'] = df['建物の構造'].fillna('RC')
+        else:
+            features['建物の構造'] = 'RC'
+            
+        if '用途' in df.columns:
+            features['用途'] = df['用途'].fillna('住宅')
+        else:
+            features['用途'] = '住宅'
         
-        # 駅距離（データがない場合はダミー値）
-        features['最寄駅距離'] = df.get('最寄駅：距離（分）', 10).fillna(10)
+        # 道路情報（サンプルデータにない場合はデフォルト値）
+        if '前面道路：幅員（ｍ）' in df.columns:
+            features['前面道路幅員'] = pd.to_numeric(df['前面道路：幅員（ｍ）'], errors='coerce').fillna(4.0)
+        else:
+            features['前面道路幅員'] = 4.0
         
-        # ターゲット変数
-        features['取引価格'] = df['取引価格（総額）']
+        # 駅距離（サンプルデータにない場合はデフォルト値）
+        if '最寄駅：距離（分）' in df.columns:
+            features['最寄駅距離'] = pd.to_numeric(df['最寄駅：距離（分）'], errors='coerce').fillna(10)
+        else:
+            features['最寄駅距離'] = 10
+        
+        # ターゲット変数 - サンプルデータの列名に合わせて修正
+        features['取引価格'] = pd.to_numeric(df.get('trade_price', 0), errors='coerce').fillna(0)
         
         # 価格の異常値を除外
         features = features[features['取引価格'] > 0]
