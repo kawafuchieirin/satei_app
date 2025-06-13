@@ -1,6 +1,6 @@
 """
 機械学習モデル専用査定システム
-MLモデルが必須
+MLモデルが必須 - ルールベース査定は削除済み
 """
 import json
 from typing import Dict, List, Optional
@@ -50,7 +50,8 @@ class LightweightValuationModel:
                 self.ml_available = True
                 logger.info("ML model loaded successfully")
             else:
-                logger.info("ML model files not found, using rule-based calculation")
+                logger.error("ML model files not found - ML model is required")
+                raise FileNotFoundError("ML model files (valuation_model.joblib, label_encoders.joblib) not found")
         except Exception as e:
             logger.warning(f"Failed to load ML model: {e}")
     
@@ -117,7 +118,8 @@ class LightweightValuationModel:
         try:
             # MLモデルが利用可能でない場合はエラー
             if not self.ml_available or self.ml_model is None:
-                raise ValueError("ML model is not available. Please ensure model files are present.")
+                logger.error("ML model is not available")
+                raise RuntimeError("ML model is not loaded. Cannot perform valuation.")
             
             # MLモデルによる予測
             estimated_price = self._ml_predict(
