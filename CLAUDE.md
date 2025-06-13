@@ -2,172 +2,157 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Application Architecture
+## Architecture Overview
 
-This is a **dual-service real estate valuation application** with Django frontend + FastAPI backend, designed for AWS Lambda deployment with local Docker development support.
+This is a microservices-based real estate valuation application for Tokyo's 23 wards, with Django frontend and FastAPI backend deployed on AWS Lambda.
 
-### Service Architecture
+### Service Communication Flow
 ```
-[User Browser] → [Django Frontend] → [FastAPI Backend] → [ML Model + Data]
+[User] → [Django Lambda] → HTTP POST → [FastAPI Lambda] → [Valuation Model]
+                ↓                            ↓
+        [Form Validation]            [LightweightModel]
+                ↓                            ↓
+        [Result Display] ← JSON ← [Price Calculation]
 ```
 
-**Key Components:**
-- **Django Frontend**: User interface, form handling, API integration (`/`)
-- **FastAPI Backend**: ML inference, data processing, API endpoints (`/api/`)
-- **ML Model**: Random Forest Regressor for property price prediction
-- **Data Source**: MLIT (National Land Infrastructure) API + mock data fallback
-
-### Service Communication
-- Django makes HTTP requests to FastAPI backend
-- **Field mapping required**: `district` ↔ `area`, `building_age` ↔ `age`
-- Current production URLs:
-  - Django: https://a2evu7tm1a.execute-api.ap-northeast-1.amazonaws.com/dev/
-  - FastAPI: https://q118xkklh2.execute-api.ap-northeast-1.amazonaws.com/Prod/
+### Production URLs
+- **Django**: https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **FastAPI**: https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod/
 
 ## Common Development Commands
 
 ### Local Development
 ```bash
-# Docker Compose (Recommended)
+# Start all services with Docker Compose
+cd deployment
 docker-compose up --build
-# Frontend: http://localhost:8080, API: http://localhost:8000
 
-# Individual services
-python manage.py runserver 0.0.0.0:8080  # Django
-cd api && uvicorn main:app --host 0.0.0.0 --port 8000 --reload  # FastAPI
+# Run Django development server only
+cd valuation-app
+python manage.py runserver 0.0.0.0:8080
+
+# Run FastAPI development server only  
+cd valuation-api
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Model Development
+### Model Management
 ```bash
-# Model management
-./manage_model.sh train --model-type rf --data-source sample
-./manage_model.sh evaluate
-./manage_model.sh info
+# Create and train a new model
+cd model-creation
+python create_model.py --data-source sample --model-type rf
 
-# Manual model creation
-python scripts/create_model.py --data-source sample
+# Evaluate model performance
+python scripts/model_evaluator.py
+
+# Quick model creation (uses defaults)
+python scripts/quick_model.py
 ```
 
-### AWS Deployment
+### Deployment Commands
 ```bash
-# One-command deployment (ECR Container - Recommended)
-./deploy.sh
+# Unified deployment script (recommended)
+cd deployment
+./deploy_unified.sh [target] [service] [env]
+# Examples:
+./deploy_unified.sh aws both prod      # Deploy both services to AWS
+./deploy_unified.sh ecr api prod       # Deploy API via ECR (for large dependencies)
+./deploy_unified.sh local both         # Local Docker deployment
 
-# Unified deployment script options
-cd deploy
-./deploy_unified.sh ecr api dev     # ECR Container (solves dependency issues)
-./deploy_unified.sh aws both dev    # Traditional ZIP deployment
-./deploy_unified.sh local both      # Local Docker
+# Manual SAM deployment
+sam build -t lambda-api-light.yml
+sam deploy --stack-name satei-api-light --resolve-s3
 
-# Manual deployment
-sam build -t deploy/lambda-api.yml
-sam deploy --template-file deploy/lambda-api.yml --stack-name satei-api-dev
+# Check deployment status
+aws cloudformation describe-stacks --stack-name satei-api-light
 ```
 
-## Key Configuration Details
+### Testing
+```bash
+# Run Django tests
+cd valuation-app
+python manage.py test valuation
 
-### Django Lambda Configuration (`satei_project/settings.py`)
+# Run API endpoint tests
+curl -X POST https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation \
+  -H "Content-Type: application/json" \
+  -d '{"prefecture":"東京都","city":"渋谷区","district":"恵比寿","land_area":100,"building_area":80,"building_age":10}'
+
+# Test local API
+curl http://localhost:8000/api/valuation -X POST -H "Content-Type: application/json" \
+  -d '{"prefecture":"東京都","city":"港区","district":"六本木","land_area":150,"building_area":120,"building_age":5}'
+```
+
+## High-Level Architecture
+
+### Service Dependencies
+The Django frontend depends on the FastAPI backend being available at the URL specified in `VALUATION_API_URL`. The deployment order matters:
+1. Deploy FastAPI first to get its URL
+2. Deploy Django with the FastAPI URL as a parameter
+
+### Lambda Adaptation Pattern
+Both services use Mangum for ASGI-to-Lambda adaptation:
 ```python
-# Lambda-specific settings
-if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
-    CSRF_TRUSTED_ORIGINS = ['https://*.execute-api.ap-northeast-1.amazonaws.com']
-    FORCE_SCRIPT_NAME = '/dev'  # API Gateway stage path handling
-    USE_X_FORWARDED_HOST = True
-    USE_X_FORWARDED_PORT = True
+# Django (lambda_handler.py)
+django_app = get_asgi_application()
+handler = Mangum(django_app, lifespan="off")
 
-# CSRF middleware is completely disabled for Lambda environment
-# CSRFViewMiddleware is commented out in MIDDLEWARE list
+# FastAPI (lambda_main.py)  
+handler = Mangum(app, lifespan="off")
 ```
 
-### FastAPI Lambda Integration (`api/lambda_main.py`)
-- Uses Mangum ASGI adapter for Lambda compatibility
-- 30-second timeout for ML inference
-- CORS enabled for cross-origin requests
+### Model Fallback Architecture
+The FastAPI service intelligently handles ML dependencies:
+```python
+try:
+    from models.valuation_model import ValuationModel  # Full ML model
+except ImportError:
+    from models.lightweight_model import LightweightValuationModel  # Rule-based fallback
+```
 
-### Requirements Management
-- **Lambda Django**: Uses root `requirements.txt` (minimal, no ML libraries)
-- **Lambda API**: `api/requirements.txt` (ML libraries excluded for ZIP deployment)
-- **ECR Container**: `api/requirements.txt` (can include full ML stack)
-- **Local Development**: Full ML stack available in root `requirements.txt`
+This allows the same codebase to work in both local (with ML libraries) and Lambda (without ML libraries) environments.
 
-## Deployment Strategies
+### Lambda Configuration Adjustments
+Django automatically detects Lambda environment and adjusts:
+- Disables CSRF middleware (commented out in settings.py)
+- Sets `FORCE_SCRIPT_NAME = '/Prod'` for API Gateway routing
+- Configures CORS trusted origins
 
-### 1. ECR Container Deployment (Recommended)
-- **Purpose**: Solves Lambda 250MB package size limitations
-- **Files**: `deploy/lambda-container.yml`, `api/Dockerfile.lambda`, `deploy/ecr-deploy.sh`
-- **Command**: `./deploy.sh` or `./deploy_unified.sh ecr api dev`
+### Price Calculation Logic
+The valuation uses a rule-based approach with Tokyo 23 ward base prices:
+- Each ward has a base price per square meter (万円/㎡)
+- Building depreciation: 3% per year, minimum 30% value retained
+- Final price includes ±10% random variation for realism
+- Results formatted as "X,XXX万円" using Django template filter
 
-### 2. Traditional ZIP Deployment
-- **Files**: `deploy/lambda-api.yml`, `deploy/lambda-django.yml`
-- **Limitation**: ML dependencies must be excluded
-- **Command**: `./deploy_unified.sh aws both dev`
+### Deployment Strategies
+1. **AWS Lambda ZIP**: Limited to 250MB, requires lightweight dependencies
+2. **ECR Container**: No size limit, can include full ML stack
+3. **Local Docker**: Full development environment with hot reload
 
-### 3. Local Docker Development
-- **Files**: `docker-compose.yml`, `deploy/docker-compose.yml`
-- **Command**: `docker-compose up --build`
+The `deploy_unified.sh` script handles all deployment complexity and provides the correct deployment order.
 
-## Critical Development Considerations
+## Critical Configuration Notes
 
-### Field Name Mapping (`valuation/views.py`)
-Django and FastAPI use different field names - mapping is required:
+### Django-FastAPI Field Mapping
+Django forms use different field names than FastAPI expects. The mapping is handled in `valuation/views.py`:
 ```python
 valuation_data = {
-    'area': form.cleaned_data['district'],     # district → area
-    'age': form.cleaned_data['building_age']   # building_age → age
+    'prefecture': form.cleaned_data['prefecture'],
+    'city': form.cleaned_data['city'],
+    'district': form.cleaned_data['district'],  # district → district (no change)
+    'land_area': form.cleaned_data['land_area'],
+    'building_area': form.cleaned_data['building_area'],
+    'building_age': form.cleaned_data['building_age']  # building_age → building_age (no change)
 }
 ```
 
-### Lambda Size Limitations
-- Lambda deployment package must be < 250MB
-- ML libraries (scikit-learn, pandas) excluded from Lambda requirements
-- Use ECR container deployment to include full ML stack
+### Lambda Package Size Management
+- Use `requirements-lambda.txt` for Lambda deployments (excludes ML libraries)
+- Full `requirements.txt` for local development
+- ECR deployment can use full requirements
 
-### API Gateway Path Handling
-- Django uses `FORCE_SCRIPT_NAME = '/dev'` for API Gateway stage routing
-- API endpoints expect `/Prod/` or `/dev/` prefixes depending on deployment
-
-### Model Management
-- Models saved as joblib files for Lambda deployment
-- Comprehensive model lifecycle via `manage_model.sh`
-- Cross-validation and performance monitoring built-in
-- Mock data fallback when MLIT API unavailable
-
-### Data Source Strategy
-- Primary: MLIT API for real estate transaction data
-- Fallback: Enhanced mock data with realistic pricing algorithms
-- Supports CSV import for custom datasets
-
-## Troubleshooting Common Issues
-
-### **Critical: Django 403 Forbidden - Primary Issue**
-The most common deployment issue is CSRF middleware conflicts in Lambda environment:
-1. **Immediate fix**: Comment out CSRFViewMiddleware in `MIDDLEWARE` list
-2. **Verify**: `FORCE_SCRIPT_NAME` matches deployment stage (`/dev` or `/Prod`)
-3. **Test**: Deploy and verify Django app loads without 403 errors
-
-### "mangum module not found" in Lambda
-- **Cause**: SAM not properly packaging dependencies
-- **Solution**: Use ECR container deployment instead of ZIP
-
-### Django 403 Forbidden Error
-- **Cause**: CSRF middleware conflict in Lambda environment
-- **Fix**: Ensure CSRFViewMiddleware is completely disabled in `settings.py`
-- **Secondary cause**: API Gateway stage path mismatch
-- **Fix**: Check `FORCE_SCRIPT_NAME` in `settings.py` matches deployed stage (`/dev` or `/Prod`)
-
-### API Call Failures
-- **Cause**: Field name mismatch between Django and FastAPI
-- **Fix**: Verify field mapping in `valuation/views.py`
-
-### Form Submission Not Working
-- **Check**: CSRF middleware is completely disabled for Lambda
-- **Verify**: API URL configuration in Django settings
-- **Common fix**: Comment out CSRFViewMiddleware in MIDDLEWARE list
-
-## File Structure Key Points
-
-- **Entry Points**: `lambda_handler.py` (Django), `api/lambda_main.py` (FastAPI)
-- **Model Code**: `api/models/` contains ML pipeline, data fetcher, evaluator
-- **Templates**: `valuation/templates/` with Bootstrap styling
-- **Deployment**: `deploy/` directory contains all AWS deployment configurations
-- **Scripts**: `scripts/` for model management and development tools
+### Environment-Specific Settings
+- Lambda detection: `if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ`
+- API URL injection: Via CloudFormation parameters
+- CSRF handling: Must be disabled for Lambda/API Gateway

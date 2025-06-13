@@ -13,7 +13,7 @@ Parameters:
   ValuationApiUrl:
     Type: String
     Description: Valuation API endpoint URL
-    Default: "https://example.com"
+    Default: "https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod"
 
 Resources:
   DjangoFunction:

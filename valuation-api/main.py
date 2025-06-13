@@ -8,15 +8,14 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ML依存関係のチェック
+# 軽量モデルのみ使用（Lambda環境用）
 try:
-    from models.valuation_model import ValuationModel
-    from models.model_evaluator import ModelEvaluator
-    ML_AVAILABLE = True
-except ImportError:
-    logger.warning("ML dependencies not available. Using lightweight model.")
     from models.lightweight_model import LightweightValuationModel
     ML_AVAILABLE = False
+    logger.info("Using lightweight model for Lambda environment.")
+except ImportError:
+    logger.error("Lightweight model not available.")
+    raise
 
 app = FastAPI(
     title="Real Estate Valuation API",
@@ -33,12 +32,8 @@ app.add_middleware(
 )
 
 # モデルの初期化
-if ML_AVAILABLE:
-    valuation_model = ValuationModel()
-    model_evaluator = None  # Lazy loading for evaluation
-else:
-    valuation_model = LightweightValuationModel()
-    model_evaluator = None
+valuation_model = LightweightValuationModel()
+model_evaluator = None
 
 
 class PropertyData(BaseModel):
