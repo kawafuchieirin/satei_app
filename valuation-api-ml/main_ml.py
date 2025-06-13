@@ -122,7 +122,7 @@ async def get_model_info():
     """
     try:
         info = {
-            "model_type": "LightGBM" if ML_AVAILABLE else "Rule-based",
+            "model_type": "LightGBM" if ML_AVAILABLE else "ML (Lightweight)",
             "is_trained": valuation_model.is_trained,
             "ml_available": ML_AVAILABLE,
             "features": getattr(valuation_model, 'feature_columns', None)

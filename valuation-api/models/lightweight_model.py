@@ -1,6 +1,6 @@
 """
 機械学習モデル専用査定システム
-MLモデルが必須
+MLモデルが必須 - ルールベース査定は削除済み
 """
 import json
 from typing import Dict, List, Optional
@@ -50,7 +50,8 @@ class LightweightValuationModel:
                 self.ml_available = True
                 logger.info("ML model loaded successfully")
             else:
-                logger.info("ML model files not found, using rule-based calculation")
+                logger.error("ML model files not found - ML model is required")
+                raise FileNotFoundError("ML model files (valuation_model.joblib, label_encoders.joblib) not found")
         except Exception as e:
             logger.warning(f"Failed to load ML model: {e}")
     
@@ -109,70 +110,25 @@ class LightweightValuationModel:
             logger.error(f"ML prediction failed: {e}")
             raise
     
-    def _rule_based_predict(self, prefecture: str, city: str, district: str,
-                           land_area: float, building_area: float, building_age: int) -> float:
-        """ルールベースによる査定価格計算"""
-        
-        # 東京23区の基準単価（万円/㎡）
-        tokyo_ward_prices = {
-            '千代田区': 220, '中央区': 180, '港区': 200, '新宿区': 120, '文京区': 110,
-            '台東区': 90, '墨田区': 75, '江東区': 85, '品川区': 100, '目黒区': 130,
-            '大田区': 80, '世田谷区': 95, '渋谷区': 160, '中野区': 85, '杉並区': 90,
-            '豊島区': 85, '北区': 70, '荒川区': 65, '板橋区': 70, '練馬区': 75,
-            '足立区': 60, '葛飾区': 60, '江戸川区': 65
-        }
-        
-        # 基準価格取得（デフォルト80万円/㎡）
-        base_price_per_sqm = tokyo_ward_prices.get(city, 80)
-        
-        # 土地価格計算
-        land_price = land_area * base_price_per_sqm
-        
-        # 建物価格計算（建築費50万円/㎡から減価償却）
-        building_unit_cost = 50  # 万円/㎡
-        depreciation_rate = min(0.03 * building_age, 0.70)  # 年3%、最大70%
-        building_price = building_area * building_unit_cost * (1 - depreciation_rate)
-        
-        # 総額計算
-        total_price = land_price + building_price
-        
-        # 立地補正
-        if city in ['千代田区', '港区', '渋谷区']:
-            total_price *= 1.2  # 一等地補正
-        elif city in ['中央区', '新宿区', '文京区', '目黒区']:
-            total_price *= 1.1  # 準一等地補正
-        
-        # 規模補正
-        if land_area >= 150:
-            total_price *= 1.1  # 大規模補正
-        elif land_area <= 50:
-            total_price *= 0.95  # 小規模補正
-            
-        logger.info(f"Rule-based calculation: ¥{total_price:,.0f}")
-        return total_price
     
     def predict(self, prefecture: str, city: str, district: str,
                 land_area: float, building_area: float, building_age: int) -> Dict:
         """
-        査定価格を予測（MLモデルまたはルールベース）
+        査定価格を予測（MLモデル専用）
         """
         try:
-            # MLモデルが利用可能な場合はMLモデルを使用
-            if self.ml_available and self.ml_model is not None:
-                estimated_price = self._ml_predict(
-                    prefecture, city, district, land_area, building_area, building_age
-                )
-                confidence = max(75, min(95, 90 - building_age * 0.3))
-                method = "機械学習モデルによる高精度予測"
-                logger.info("Using ML model prediction")
-            else:
-                # MLモデルが利用できない場合はルールベース計算
-                estimated_price = self._rule_based_predict(
-                    prefecture, city, district, land_area, building_area, building_age
-                )
-                confidence = max(60, min(85, 80 - building_age * 0.5))
-                method = "ルールベースによる基本査定"
-                logger.info("Using rule-based prediction")
+            # MLモデルが利用可能かチェック
+            if not self.ml_available or self.ml_model is None:
+                logger.error("ML model is not available")
+                raise RuntimeError("ML model is not loaded. Cannot perform valuation.")
+            
+            # MLモデルで予測実行
+            estimated_price = self._ml_predict(
+                prefecture, city, district, land_area, building_area, building_age
+            )
+            confidence = max(75, min(95, 90 - building_age * 0.3))
+            method = "機械学習モデルによる高精度予測"
+            logger.info("Using ML model prediction")
             
             # 価格帯計算
             price_range = {
