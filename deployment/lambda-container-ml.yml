@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Real Estate Valuation API - ML Container Version
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
+  
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the Lambda function
+
+Globals:
+  Function:
+    Timeout: 300  # 5分（MLモデルのロードと推論のため）
+    MemorySize: 3008  # 3GB（ML処理のため）
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        LOG_LEVEL: INFO
+
+Resources:
+  ValuationApiMLFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub satei-api-ml-${Environment}
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      Environment:
+        Variables:
+          MODEL_PATH: /var/task/models
+          ENABLE_ML: "true"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        RootApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+      # MLモデルファイル用のEFSマウント（オプション）
+      # FileSystemConfigs:
+      #   - Arn: !GetAtt MLModelsEFS.Arn
+      #     LocalMountPath: /mnt/models
+
+  # API Gateway のログ設定
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/satei-api-ml-${Environment}
+      RetentionInDays: 30
+
+  # Lambda関数のログ設定
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/satei-api-ml-${Environment}
+      RetentionInDays: 30
+
+  # S3バケット（モデルファイル保存用）
+  ModelBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub satei-ml-models-${Environment}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            NoncurrentVersionExpirationInDays: 30
+            Status: Enabled
+
+  # Lambda関数にS3アクセス権限を付与
+  LambdaS3Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub satei-api-ml-s3-policy-${Environment}
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt ModelBucket.Arn
+              - !Sub ${ModelBucket.Arn}/*
+      Roles:
+        - !Ref ValuationApiMLFunctionRole
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+  
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ValuationApiMLFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+  
+  ModelBucketName:
+    Description: S3 bucket for ML models
+    Value: !Ref ModelBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ModelBucket
