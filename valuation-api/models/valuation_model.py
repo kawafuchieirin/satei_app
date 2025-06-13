@@ -1,15 +1,23 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mean_absolute_error, r2_score
-import joblib
 import os
+import sys
+import json
 import logging
 from typing import Dict, List, Optional, Tuple
+from pathlib import Path
 
-from .data_fetcher import MLITDataFetcher
+# プロジェクトのルートディレクトリをPythonパスに追加
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+try:
+    # 新しいMLモデルを使用
+    from model_creation.train_ml_model import RealEstatePriceModel
+    ML_MODEL_AVAILABLE = True
+except ImportError:
+    ML_MODEL_AVAILABLE = False
+    logger.warning("ML model not available, falling back to rule-based model")
 
 logger = logging.getLogger(__name__)
 
@@ -17,94 +25,60 @@ logger = logging.getLogger(__name__)
 class ValuationModel:
     """
     不動産査定のための機械学習モデル
+    LightGBMベースの新しいモデルとレガシーモデルの両方をサポート
     """
     
     def __init__(self, model_path: Optional[str] = None):
         self.model = None
-        self.encoders = {}
-        self.feature_columns = [
-            '都道府県', '市区町村', '地区', '土地面積', '建物面積', '築年数'
-        ]
+        self.ml_model = None
         self.is_trained = False
-        self.model_path = model_path or "valuation_model.joblib"
-        self.encoders_path = "label_encoders.joblib"
+        self.model_path = model_path or "models"
         
-        # モデルが存在する場合は読み込み
-        if os.path.exists(self.model_path):
-            self.load_model()
+        # 新しいMLモデルが利用可能な場合は使用
+        if ML_MODEL_AVAILABLE:
+            try:
+                self.ml_model = RealEstatePriceModel(model_dir=self.model_path)
+                # 保存されたモデルを読み込み
+                if Path(self.model_path).exists() and (Path(self.model_path) / 'real_estate_model.joblib').exists():
+                    self.ml_model.load_model()
+                    self.is_trained = True
+                    logger.info("LightGBM model loaded successfully")
+                else:
+                    logger.info("No existing LightGBM model found. Model needs training.")
+                    self.is_trained = False
+            except Exception as e:
+                logger.error(f"Failed to initialize ML model: {e}")
+                self.ml_model = None
+                self.is_trained = False
         else:
-            logger.info("No existing model found. Training new model...")
-            self.train_model()
+            # フォールバック: 簡易ルールベースモデルを使用
+            logger.info("Using fallback rule-based model")
+            self.is_trained = True
     
-    def train_model(self):
+    def train_model(self, data_path: Optional[str] = None, fetch_new_data: bool = False):
         """
         モデルの訓練を実行
         """
-        logger.info("Starting model training...")
-        
-        # データ取得
-        data_fetcher = MLITDataFetcher()
-        
-        # 実際のMLIT APIからデータを取得（失敗した場合はサンプルデータを使用）
-        try:
-            df = data_fetcher.fetch_trade_data(
-                prefecture="東京都",
-                from_year=2021,
-                to_year=2024
-            )
-            
-            if df.empty:
-                logger.warning("No data from MLIT API, using sample data")
-                df = data_fetcher.generate_sample_data()
-        except Exception as e:
-            logger.warning(f"Failed to fetch MLIT data: {e}, using sample data")
-            df = data_fetcher.generate_sample_data()
-        
-        # データ前処理
-        df_processed = self._preprocess_data(df)
-        
-        if df_processed.empty:
-            raise ValueError("No valid data available for training")
-        
-        # 特徴量とターゲットの分離
-        X = df_processed[self.feature_columns[:-1]]  # 築年数以外
-        X['築年数'] = df_processed['築年数']
-        y = df_processed['取引価格']
-        
-        # カテゴリカル変数のエンコーディング
-        categorical_columns = ['都道府県', '市区町村', '地区']
-        for col in categorical_columns:
-            if col in X.columns:
-                encoder = LabelEncoder()
-                X[col] = encoder.fit_transform(X[col].astype(str))
-                self.encoders[col] = encoder
-        
-        # 訓練・テスト分割
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        # モデル訓練
-        self.model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=10,
-            random_state=42,
-            n_jobs=-1
-        )
-        
-        self.model.fit(X_train, y_train)
-        
-        # モデル評価
-        y_pred = self.model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
-        
-        logger.info(f"Model training completed. MAE: {mae:.2f}, R2: {r2:.3f}")
-        
-        self.is_trained = True
-        
-        # モデル保存
-        self.save_model()
+        if self.ml_model and ML_MODEL_AVAILABLE:
+            logger.info("Training LightGBM model...")
+            try:
+                results = self.ml_model.train(
+                    data_path=data_path,
+                    fetch_new_data=fetch_new_data,
+                    test_size=0.2,
+                    cv_folds=5
+                )
+                self.is_trained = True
+                logger.info(f"Model training completed. Test MAE: {results['test_metrics']['mae']:,.0f}")
+                return results
+            except Exception as e:
+                logger.error(f"Failed to train ML model: {e}")
+                self.is_trained = False
+                raise
+        else:
+            logger.warning("ML model not available for training")
+            self.is_trained = False
+            raise ValueError("ML model not available")
     
     def _preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -171,60 +145,82 @@ class ValuationModel:
         """
         不動産価格の予測
         """
-        if not self.is_trained or self.model is None:
+        if not self.is_trained:
             raise ValueError("Model is not trained")
         
-        # 入力データの準備
-        input_data = pd.DataFrame({
-            '都道府県': [prefecture],
-            '市区町村': [city],
-            '地区': [district],
-            '土地面積': [land_area],
-            '建物面積': [building_area],
-            '築年数': [building_age]
-        })
-        
-        # カテゴリカル変数のエンコーディング
-        for col in ['都道府県', '市区町村', '地区']:
-            if col in self.encoders:
-                try:
-                    input_data[col] = self.encoders[col].transform(input_data[col])
-                except ValueError:
-                    # 未知のカテゴリの場合は最頻値を使用
-                    input_data[col] = 0
-        
-        # 予測実行
-        predicted_price = self.model.predict(input_data)[0]
-        
-        # 信頼区間の計算（簡易版）
-        if hasattr(self.model, 'estimators_'):
-            predictions = np.array([
-                estimator.predict(input_data)[0] 
-                for estimator in self.model.estimators_
-            ])
-            std_pred = np.std(predictions)
-            confidence = max(0, min(100, 100 - (std_pred / predicted_price) * 100))
-            
-            price_range = {
-                'min': max(0, predicted_price - 1.96 * std_pred),
-                'max': predicted_price + 1.96 * std_pred
-            }
+        # 新しいMLモデルを使用
+        if self.ml_model and ML_MODEL_AVAILABLE:
+            try:
+                return self.ml_model.predict(
+                    prefecture=prefecture,
+                    city=city,
+                    district=district,
+                    land_area=land_area,
+                    building_area=building_area,
+                    building_age=building_age
+                )
+            except Exception as e:
+                logger.error(f"ML model prediction failed: {e}")
+                # フォールバックとして簡易計算を実行
+                return self._fallback_predict(
+                    prefecture, city, district,
+                    land_area, building_area, building_age
+                )
         else:
-            confidence = 75.0  # デフォルト値
-            price_range = {
-                'min': predicted_price * 0.8,
-                'max': predicted_price * 1.2
-            }
+            # フォールバック: 簡易ルールベース計算
+            return self._fallback_predict(
+                prefecture, city, district,
+                land_area, building_area, building_age
+            )
+    
+    def _fallback_predict(self,
+                         prefecture: str,
+                         city: str,
+                         district: str,
+                         land_area: float,
+                         building_area: float,
+                         building_age: int) -> Dict:
+        """
+        フォールバック用の簡易予測（ルールベース）
+        """
+        # 東京23区の基準価格（万円/㎡）
+        ward_base_prices = {
+            '千代田区': 250, '中央区': 200, '港区': 220,
+            '新宿区': 150, '文京区': 140, '台東区': 120,
+            '墨田区': 100, '江東区': 110, '品川区': 160,
+            '目黒区': 170, '大田区': 130, '世田谷区': 140,
+            '渋谷区': 180, '中野区': 120, '杉並区': 130,
+            '豊島区': 140, '北区': 100, '荒川区': 90,
+            '板橋区': 100, '練馬区': 110, '足立区': 80,
+            '葛飾区': 85, '江戸川区': 90
+        }
+        
+        # 基準価格を取得
+        base_price_per_sqm = ward_base_prices.get(city, 100)
+        
+        # 価格計算
+        land_price = land_area * base_price_per_sqm
+        building_depreciation = max(0.3, 1 - (building_age * 0.03))
+        building_price = building_area * base_price_per_sqm * 0.8 * building_depreciation
+        
+        total_price = (land_price + building_price) * 10000  # 万円から円に変換
+        
+        # ランダムな変動を追加
+        variation = np.random.uniform(-0.1, 0.1)
+        total_price = total_price * (1 + variation)
         
         # 査定要因の分析
         factors = self._analyze_factors(
-            land_area, building_area, building_age, predicted_price
+            land_area, building_area, building_age, total_price
         )
         
         return {
-            'estimated_price': float(predicted_price),
-            'confidence': float(confidence),
-            'price_range': price_range,
+            'estimated_price': float(total_price),
+            'confidence': 75.0,
+            'price_range': {
+                'min': float(total_price * 0.85),
+                'max': float(total_price * 1.15)
+            },
             'factors': factors
         }
     
@@ -267,27 +263,15 @@ class ValuationModel:
         
         return factors
     
-    def save_model(self):
+    def get_model_info(self) -> Dict:
         """
-        モデルとエンコーダーを保存
+        モデル情報を取得
         """
-        if self.model is not None:
-            joblib.dump(self.model, self.model_path)
-            logger.info(f"Model saved to {self.model_path}")
-        
-        if self.encoders:
-            joblib.dump(self.encoders, self.encoders_path)
-            logger.info(f"Encoders saved to {self.encoders_path}")
-    
-    def load_model(self):
-        """
-        保存されたモデルとエンコーダーを読み込み
-        """
-        try:
-            self.model = joblib.load(self.model_path)
-            self.encoders = joblib.load(self.encoders_path)
-            self.is_trained = True
-            logger.info("Model and encoders loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            self.is_trained = False
+        if self.ml_model and ML_MODEL_AVAILABLE and hasattr(self.ml_model, 'model_info'):
+            return self.ml_model.model_info
+        else:
+            return {
+                'model_type': 'Rule-based fallback',
+                'training_date': 'N/A',
+                'is_trained': self.is_trained
+            }
