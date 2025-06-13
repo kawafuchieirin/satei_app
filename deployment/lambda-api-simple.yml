@@ -1,0 +1,48 @@
+# AWS SAM テンプレート（FastAPI Lambda ZIP版）
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+Resources:
+  ValuationApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "satei-api-simple-${Environment}"
+      CodeUri: ../valuation-api
+      Handler: lambda_main.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          PYTHONPATH: /var/task
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+
+Outputs:
+  ValuationApi:
+    Description: "API Gateway endpoint URL for Valuation API"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

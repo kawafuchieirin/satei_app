@@ -33,24 +33,25 @@ ML モデルの作成・管理ツール
 ## 🌐 デプロイ済みアプリケーション
 
 **現在の本番環境**：
-- **Webアプリケーション**: https://w87iwps1jk.execute-api.ap-northeast-1.amazonaws.com/Prod/
-- **査定API**: 未デプロイ（ECRデプロイが必要）
+- **Webアプリケーション**: https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **査定機能**: Django内蔵（直接計算方式）
 
 ## 概要
 
 このアプリケーションは以下の構成になっています：
 
 - **フロントエンド**: Django（ユーザーインターフェース）
-- **バックエンド**: FastAPI（査定API）
-- **機械学習**: scikit-learn（不動産価格予測モデル）
+- **査定ロジック**: Django内蔵（ルールベース計算）
+- **機械学習**: scikit-learn（将来の拡張用）
 - **デプロイ**: AWS Lambda + API Gateway
 
 ## 機能
 
-- 物件の基本情報入力（都道府県、市区町村、地区、土地面積、建物面積、築年数）
-- 機械学習モデルによる査定価格予測
+- 物件の基本情報入力（東京都23区限定、土地面積、建物面積、築年数）
+- ルールベースによる査定価格予測
 - 査定結果の信頼度表示
 - 査定要因の分析表示
+- 価格表示形式：「X,XXX万円」形式
 
 ## アーキテクチャ
 
@@ -58,10 +59,10 @@ ML モデルの作成・管理ツール
 [ユーザー] 
     ↓
 [Django Frontend - AWS Lambda]
-    ↓ HTTP Request  
-[FastAPI Backend - AWS Lambda]
+    ↓ 内部関数呼び出し
+[ルールベース査定ロジック]
     ↓
-[ML Model + Mock Data]
+[東京23区価格データ + 計算式]
 ```
 
 ## 必要な環境
@@ -74,33 +75,27 @@ ML モデルの作成・管理ツール
 
 ### Webアプリケーション
 
-1. **アクセス**: https://w87iwps1jk.execute-api.ap-northeast-1.amazonaws.com/Prod/
+1. **アクセス**: https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/
 2. **査定開始**: 「査定を開始する」ボタンをクリック
 3. **情報入力**:
-   - 都道府県（例：東京都）
-   - 市区町村（例：渋谷区）
+   - 都道府県（固定：東京都）
+   - 市区町村（23区から選択、オートサジェスト機能付き）
    - 地区名（例：恵比寿）
    - 土地面積（㎡）
    - 建物面積（㎡）
    - 築年数（年）
 4. **査定実行**: 「査定を実行」ボタンをクリック
-5. **結果確認**: 査定価格、信頼度、価格帯、査定要因を確認
+5. **結果確認**: 査定価格（X,XXX万円形式）、信頼度、価格帯、査定要因を確認
 
-### API直接利用
+### 査定機能の詳細
 
-```bash
-# 注意: 現在APIは未デプロイのため、デプロイ後にURLを更新してください
-curl -X POST "https://<api-id>.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prefecture": "東京都",
-    "city": "渋谷区",
-    "district": "恵比寿",
-    "land_area": 100.0,
-    "building_area": 80.0,
-    "building_age": 10
-  }'
-```
+現在の査定機能は Django アプリケーション内で直接実行されます：
+
+- **東京23区対応**: 各区の基準価格データを内蔵
+- **ルールベース計算**: 土地面積 × 基準価格 + 建物面積 × 減価計算
+- **築年数減価**: 年3%の減価率（最低30%まで）
+- **価格変動**: ランダム要素で±10%の変動
+- **オートサジェスト**: 23区名の入力補完機能
 
 ## ローカル環境での実行
 
@@ -130,86 +125,56 @@ docker-compose up --build
 
 ### デプロイ方法
 
-#### Django フロントエンド（ZIP デプロイ）
+#### Django アプリケーション（本体デプロイ）
 
 ```bash
 cd deployment
 sam build -t lambda-django.yml
-sam deploy --template-file .aws-sam/build/template.yaml \
-  --stack-name satei-django-dev \
+sam deploy --stack-name satei-django-app \
+  --parameter-overrides Environment=prod \
   --capabilities CAPABILITY_IAM \
-  --parameter-overrides Environment=dev \
-  ValuationApiUrl=https://<api-id>.execute-api.ap-northeast-1.amazonaws.com/Prod \
   --resolve-s3
 ```
 
-#### FastAPI バックエンド（ECR デプロイ - 推奨）
+#### 本番環境の現在の設定
 
-MLライブラリのサイズが大きいため、ECRコンテナデプロイを使用：
+- **スタック名**: satei-django-app
+- **環境**: prod  
+- **URL**: https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/
+- **査定機能**: Django 内蔵（FastAPI 不要）
 
-```bash
-cd deployment
-./ecr-deploy.sh api dev
-```
+## 📊 査定ロジック仕様
 
-#### 統合デプロイスクリプト
+### 査定計算方式
 
-```bash
-cd deployment
-# ECRでAPIをデプロイ
-./deploy_unified.sh ecr api dev
+**ルールベース計算**（Django 内蔵）:
 
-# 通常のZIPデプロイ（ML依存関係なし）
-./deploy_unified.sh aws django dev
-```
+1. **基準価格**: 東京23区ごとの万円/㎡単価
+2. **土地価格**: 土地面積 × 基準価格
+3. **建物価格**: 建物面積 × 基準価格 × 0.8 × 減価率
+4. **減価率**: max(0.3, 1 - 築年数 × 0.03)
+5. **最終価格**: (土地価格 + 建物価格) × 変動率(0.9-1.1)
 
-## 📊 API仕様
-
-### 査定API
-
-**エンドポイント**: `POST /api/valuation`
-
-**リクエスト**:
-```json
-{
-  "prefecture": "東京都",
-  "city": "渋谷区",
-  "district": "渋谷1-1-1",
-  "land_area": 100.0,
-  "building_area": 80.0,
-  "building_age": 10
-}
-```
-
-**レスポンス**:
-```json
-{
-  "estimated_price": 75000000,
-  "confidence": 85.2,
-  "price_range": {
-    "min": 65000000,
-    "max": 85000000
-  },
-  "factors": [
-    "土地面積が広く、価格にプラス影響",
-    "比較的新しい物件で、価格への影響は中程度"
-  ]
-}
-```
+**23区基準価格例**:
+- 千代田区: 250万円/㎡
+- 港区: 220万円/㎡  
+- 渋谷区: 180万円/㎡
+- 新宿区: 150万円/㎡
 
 ## 📊 データソース
 
 **現在のデータソース**:
-- モックデータを使用したデモンストレーション
+- 東京23区の基準価格データ（静的データ）
+- ルールベース計算ロジック
 - 実用版では国土交通省の不動産取引価格情報API を使用予定
 - API: https://www.reinfolib.mlit.go.jp/help/apiManual/
 
-## 🤖 機械学習モデル
+## 🤖 機械学習モデル（将来拡張用）
 
 - **アルゴリズム**: Random Forest Regressor
 - **特徴量**: 都道府県、市区町村、地区、土地面積、建物面積、築年数
 - **評価指標**: MAE (Mean Absolute Error), R² Score
-- **現在の状態**: モックデータでのデモンストレーション
+- **現在の状態**: ルールベース計算で代替実装
 
 ## 免責事項
 

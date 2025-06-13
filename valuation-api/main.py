@@ -5,11 +5,17 @@ import logging
 from typing import Optional, List, Dict
 import os
 
-from models.valuation_model import ValuationModel
-from models.model_evaluator import ModelEvaluator
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 軽量モデルのみ使用（Lambda環境用）
+try:
+    from models.lightweight_model import LightweightValuationModel
+    ML_AVAILABLE = False
+    logger.info("Using lightweight model for Lambda environment.")
+except ImportError:
+    logger.error("Lightweight model not available.")
+    raise
 
 app = FastAPI(
     title="Real Estate Valuation API",
@@ -25,8 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-valuation_model = ValuationModel()
-model_evaluator = None  # Lazy loading for evaluation
+# モデルの初期化
+valuation_model = LightweightValuationModel()
+model_evaluator = None
 
 
 class PropertyData(BaseModel):
