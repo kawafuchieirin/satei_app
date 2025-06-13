@@ -1,19 +1,239 @@
-# モデル作成スクリプト集
+# モデル作成ツール
 
-不動産査定AIモデルを作成・管理するためのスクリプト集です。
+このディレクトリには、不動産査定モデルを作成・管理するためのツールが含まれています。
 
-## 📁 ファイル構成
+## 🚀 新機能: LightGBMベースのMLモデル
+
+東京23区の実データを使用したLightGBMモデルによる高精度な価格予測が可能になりました。
+
+### クイックスタート
+
+```bash
+# 完全なMLパイプラインを実行（データ取得→訓練→デプロイ）
+python ml_model_manager.py full
+
+# または個別に実行
+python ml_model_manager.py fetch    # データ取得
+python ml_model_manager.py train    # モデル訓練
+python ml_model_manager.py deploy   # デプロイ
+python ml_model_manager.py evaluate # 評価
+```
+
+## 新しいMLモデルシステム
+
+### 1. tokyo23_data_fetcher.py
+国土交通省APIから東京23区の不動産取引データを取得
+
+```bash
+# 環境変数にAPIキーを設定
+export MLIT_API_KEY="your_api_key_here"
+
+# データ取得（スタンドアロン実行）
+python tokyo23_data_fetcher.py
+```
+
+特徴:
+- 2022-2024年の東京23区全データを自動収集
+- 和暦→西暦変換、データクリーニング機能
+- CSV形式で保存（`data/`ディレクトリ）
+
+### 2. data_preprocessor.py
+MLモデル用のデータ前処理
+
+特徴:
+- カテゴリカル変数のエンコーディング
+- 数値データの正規化
+- 特徴量エンジニアリング
+
+### 3. train_ml_model.py
+LightGBMを使用した機械学習モデルの訓練
+
+```bash
+# 新規データで訓練
+python train_ml_model.py --fetch-new
+
+# 既存CSVデータで訓練
+python train_ml_model.py --data-path data/tokyo23_real_estate_2022_2024.csv
+
+# クロスバリデーション設定
+python train_ml_model.py --cv-folds 10 --test-size 0.3
+```
+
+特徴:
+- LightGBM（勾配ブースティング）による高精度予測
+- クロスバリデーション
+- 特徴量重要度分析
+- 予測信頼区間の推定
+
+### 4. ml_model_manager.py
+MLモデルの統合管理ツール
+
+```bash
+# 使用例
+python ml_model_manager.py -h  # ヘルプ表示
+
+# コマンド一覧
+python ml_model_manager.py full      # 完全パイプライン
+python ml_model_manager.py fetch     # データ取得のみ
+python ml_model_manager.py train     # モデル訓練のみ
+python ml_model_manager.py deploy    # デプロイのみ
+python ml_model_manager.py evaluate  # 評価のみ
+```
+
+## FastAPI統合
+
+### 新しいエンドポイント
+
+valuation-api/main_ml.py で以下のエンドポイントが利用可能:
+
+- `POST /api/valuation` - 価格予測（ML/ルールベース自動切替）
+- `GET /api/model/info` - モデル情報取得
+- `POST /api/model/train` - モデル訓練（MLモデルのみ）
+- `GET /api/model/feature-importance` - 特徴量重要度
+
+### 使用方法
+
+```python
+# FastAPIサーバー起動（MLモデル対応版）
+cd valuation-api
+uvicorn main_ml:app --reload
+```
+
+## 既存ツールとの統合
+
+既存のツール（quick_model.py、create_model.py等）も引き続き使用可能です:
+
+### 1. model_manager.py
+統一されたモデル管理インターフェース
+
+```bash
+python model_manager.py status      # モデルの状態確認
+python model_manager.py quick       # クイックモデル作成
+python model_manager.py create      # 詳細モデル作成
+python model_manager.py batch       # バッチモデル訓練
+```
+
+### 2. quick_model.py
+プリセットを使用した高速モデル作成（RandomForest）
+
+```bash
+python quick_model.py --preset balanced
+```
+
+### 3. create_model.py
+詳細な設定でモデルを作成（複数アルゴリズム対応）
+
+```bash
+python create_model.py --model-type rf --tune
+```
+
+## データソース
+
+### MLIT API（推奨）
+- 国土交通省の実データ
+- APIキーが必要（[登録はこちら](https://www.reinfolib.mlit.go.jp/register.html)）
+- 高精度な予測が可能
+
+### サンプルデータ
+- APIキー不要
+- テスト・開発用途
+
+## 出力ファイル
+
+### MLモデル（LightGBM）
+- `models/real_estate_model.joblib` - 訓練済みLightGBMモデル
+- `models/label_encoders.joblib` - カテゴリ変数エンコーダー
+- `models/scaler.joblib` - 数値正規化スケーラー
+- `models/feature_columns.joblib` - 特徴量リスト
+- `models/model_info.json` - モデルメタデータ
+- `models/model_evaluation.png` - 評価グラフ
+
+### レガシーモデル（RandomForest等）
+- `../api/valuation_model.joblib` - 訓練済みモデル
+- `../api/label_encoders.joblib` - エンコーダー
+- `../api/training_info_*.json` - 訓練情報
+
+## ワークフロー例
+
+### 本番環境向けMLモデル構築
+
+```bash
+# 1. APIキーを設定
+export MLIT_API_KEY="your_api_key"
+
+# 2. 完全パイプライン実行
+python ml_model_manager.py full
+
+# 3. FastAPIサーバー起動
+cd ../valuation-api
+uvicorn main_ml:app --host 0.0.0.0 --port 8000
+```
+
+### カスタムデータでの訓練
+
+```bash
+# 1. データ準備（CSVファイル）
+# 必要列: 区, 地区名, 土地面積, 建物面積, 築年数, 取引価格（総額）
+
+# 2. モデル訓練
+python train_ml_model.py --data-path your_data.csv
+
+# 3. デプロイ
+python ml_model_manager.py deploy --target api
+```
+
+## Lambda デプロイメント
+
+LightGBMはサイズが大きいため、Lambda環境では自動的にルールベースモデルにフォールバックします。
+
+完全なMLモデルを使用する場合:
+- ECRコンテナデプロイメントを使用
+- または、推論専用の軽量化されたモデルを作成
+
+## トラブルシューティング
+
+### LightGBMインストールエラー
+```bash
+# macOS
+brew install libomp
+
+# Ubuntu/Debian  
+sudo apt-get install -y libgomp1
+```
+
+### メモリ不足
+- データサンプリングを使用
+- `--test-size` を増やして訓練データを削減
+
+### APIキーエラー
+- 環境変数 `MLIT_API_KEY` が設定されているか確認
+- APIキーの有効性を確認
+
+## 注意事項
+
+- MLモデルは定期的な再訓練が必要です（月1回推奨）
+- 実データ使用時はAPIレート制限に注意
+- モデルファイルは数MB〜数十MBになる可能性があります
+- Lambda環境ではファイルサイズ制限により自動的にフォールバックモデルを使用
+
+---
+
+## 📁 ファイル構成（既存ツール）
 
 ```
-scripts/
+model-creation/
 ├── model_manager.py          # 🎯 統合管理スクリプト（推奨）
 ├── quick_model.py           # ⚡ クイックモデル作成
 ├── create_model.py          # 🔬 詳細モデル作成
 ├── batch_model_training.py  # 🚀 バッチ学習
+├── tokyo23_data_fetcher.py  # 🆕 MLIT APIデータ取得
+├── data_preprocessor.py     # 🆕 データ前処理
+├── train_ml_model.py        # 🆕 LightGBMモデル訓練
+├── ml_model_manager.py      # 🆕 MLモデル統合管理
 └── README.md               # 📖 このファイル
 ```
 
-## 🎯 統合管理スクリプト（推奨）
+## 🎯 統合管理スクリプト（既存）
 
 全機能を統合した使いやすいメインスクリプトです。
 
@@ -21,19 +241,19 @@ scripts/
 
 ```bash
 # 現在の状態確認
-python scripts/model_manager.py status
+python model_manager.py status
 
 # クイックモデル作成（推奨）
-python scripts/model_manager.py quick
+python model_manager.py quick
 
 # モデル評価
-python scripts/model_manager.py evaluate
+python model_manager.py evaluate
 
 # モデル比較
-python scripts/model_manager.py compare
+python model_manager.py compare
 
 # モデルデプロイ
-python scripts/model_manager.py deploy
+python model_manager.py deploy
 ```
 
 ### 利用可能なコマンド
@@ -47,253 +267,6 @@ python scripts/model_manager.py deploy
 | `evaluate` | 現在のモデルを詳細評価 | 1-2分 | ★★★ |
 | `compare` | 過去のモデルと比較 | 数秒 | ★★ |
 | `deploy` | モデルをAPIに反映 | 数秒 | ★★★ |
-
-## ⚡ クイックモデル作成
-
-最も簡単で高速なモデル作成方法です。**初心者にオススメ**。
-
-### 使用方法
-
-```bash
-# バランス型（推奨）
-python scripts/quick_model.py --preset balanced
-
-# 高速型（精度やや劣る、速度重視）
-python scripts/quick_model.py --preset fast
-
-# 高精度型（時間かかる、最高精度）
-python scripts/quick_model.py --preset best
-```
-
-### 特徴
-
-- **所要時間**: 1-3分
-- **難易度**: ★☆☆
-- **精度**: ★★☆ - ★★★
-- **設定**: プリセットのみ
-- **推奨用途**: 初回作成、プロトタイピング
-
-## 🔬 詳細モデル作成
-
-高度な設定が可能な本格的なモデル作成ツールです。
-
-### 使用方法
-
-```bash
-# 基本的な詳細作成
-python scripts/create_model.py --data-source sample
-
-# ハイパーパラメータ調整なし（高速）
-python scripts/create_model.py --data-source sample --no-grid-search
-
-# MLIT実データを使用（APIキー必要）
-python scripts/create_model.py --data-source mlit
-
-# 交差検証の分割数変更
-python scripts/create_model.py --cv-folds 10
-
-# 評価も同時実行
-python scripts/create_model.py --data-source sample --evaluate
-```
-
-### オプション
-
-- `--data-source`: データソース（sample/mlit/csv）
-- `--no-grid-search`: ハイパーパラメータ調整スキップ
-- `--cv-folds`: 交差検証分割数（デフォルト: 5）
-- `--test-size`: テストデータ割合（デフォルト: 0.2）
-- `--output-dir`: 出力ディレクトリ
-- `--evaluate`: 学習後に評価実行
-
-### 特徴
-
-- **所要時間**: 5-15分
-- **難易度**: ★★☆
-- **精度**: ★★★
-- **設定**: 詳細設定可能
-- **推奨用途**: 本格運用、精度重視
-
-## 🚀 バッチ学習
-
-複数の設定でモデルを並列学習し、最適なモデルを自動選択します。
-
-### 使用方法
-
-```bash
-# 基本的なバッチ学習
-python scripts/batch_model_training.py --data-source sample
-
-# 並列数指定
-python scripts/batch_model_training.py --max-workers 4
-
-# MLIT実データ使用
-python scripts/batch_model_training.py --data-source mlit
-```
-
-### 学習されるモデル
-
-1. **Random Forest** (4種類の設定)
-2. **Gradient Boosting** (3種類の設定)
-3. **Ridge回帰** (4種類のα値)
-4. **Lasso回帰** (3種類のα値)
-
-### 特徴
-
-- **所要時間**: 10-30分
-- **難易度**: ★★★
-- **精度**: ★★★
-- **設定**: 自動最適化
-- **推奨用途**: 最高精度が必要、時間に余裕がある場合
-
-## 📊 実行例
-
-### 1. 初回セットアップ
-
-```bash
-# 1. 現在の状態確認
-python scripts/model_manager.py status
-
-# 2. クイックモデル作成
-python scripts/model_manager.py quick --preset balanced
-
-# 3. モデル評価
-python scripts/model_manager.py evaluate
-
-# 4. APIサーバーに反映
-python scripts/model_manager.py deploy
-```
-
-### 2. 精度改善
-
-```bash
-# 1. 詳細モデル作成
-python scripts/model_manager.py create --data-source sample
-
-# 2. バッチ学習で最適化
-python scripts/model_manager.py batch --max-workers 4
-
-# 3. モデル比較
-python scripts/model_manager.py compare
-
-# 4. 最良モデルをデプロイ
-python scripts/model_manager.py deploy
-```
-
-### 3. 運用・監視
-
-```bash
-# 定期的な状態確認
-python scripts/model_manager.py status
-
-# 新しいデータでモデル更新
-python scripts/model_manager.py quick --preset best
-
-# 評価・比較
-python scripts/model_manager.py evaluate
-python scripts/model_manager.py compare
-```
-
-## 🎯 推奨ワークフロー
-
-### 初心者向け
-
-1. `python scripts/model_manager.py quick` - クイックモデル作成
-2. `python scripts/model_manager.py evaluate` - 評価確認
-3. `python scripts/model_manager.py deploy` - デプロイ
-
-### 上級者向け
-
-1. `python scripts/model_manager.py create` - 詳細モデル作成
-2. `python scripts/model_manager.py batch` - バッチ最適化
-3. `python scripts/model_manager.py compare` - 比較分析
-4. `python scripts/model_manager.py deploy` - 最良モデルデプロイ
-
-## 📈 出力ファイル
-
-### モデルファイル（本番用）
-
-- `../api/valuation_model.joblib` - メインモデル
-- `../api/label_encoders.joblib` - カテゴリ変数エンコーダー
-
-### 学習情報ファイル
-
-- `quick_model_info_YYYYMMDD_HHMMSS.json` - クイック学習情報
-- `training_info_YYYYMMDD_HHMMSS.json` - 詳細学習情報
-- `batch_training_results_YYYYMMDD_HHMMSS.json` - バッチ学習結果
-- `model_report_YYYYMMDD_HHMMSS.md` - 詳細レポート
-
-### 可視化ファイル（詳細作成時）
-
-- `model_comparison.png` - モデル比較グラフ
-- `best_model_analysis.png` - 最良モデル分析
-- `feature_importance.png` - 特徴量重要度
-
-## ⚠️ 注意事項
-
-### システム要件
-
-- Python 3.11+
-- 必要なライブラリ: pandas, scikit-learn, matplotlib, seaborn
-- メモリ: 最低2GB（バッチ学習時は4GB推奨）
-- CPU: マルチコア推奨（並列処理のため）
-
-### データソースについて
-
-- **sample**: 人工データ、常に利用可能、開発・テスト用
-- **mlit**: 国土交通省実データ、APIキー必要、本番用
-- **csv**: カスタムデータ、`training_data.csv`が必要
-
-### パフォーマンス目安
-
-| スクリプト | データ件数 | 実行時間 | メモリ使用量 |
-|------------|------------|----------|--------------|
-| quick_model | 1,500件 | 1-3分 | 500MB |
-| create_model | 2,000件 | 5-15分 | 1-2GB |
-| batch_training | 2,000件 | 10-30分 | 2-4GB |
-
-## 🔧 トラブルシューティング
-
-### よくある問題
-
-1. **メモリ不足エラー**
-   ```bash
-   # データサイズを削減
-   python scripts/quick_model.py --preset fast
-   ```
-
-2. **MLIT API接続エラー**
-   ```bash
-   # サンプルデータに切り替え
-   python scripts/model_manager.py quick --preset balanced
-   ```
-
-3. **モデルが読み込まれない**
-   ```bash
-   # APIサーバー再起動
-   docker-compose restart api
-   ```
-
-4. **スクリプト実行エラー**
-   ```bash
-   # 権限付与
-   chmod +x scripts/*.py
-   
-   # 依存関係インストール
-   pip install pandas scikit-learn matplotlib seaborn
-   ```
-
-### ログ確認
-
-スクリプト実行時のログは標準出力に表示されます。エラーが発生した場合は、エラーメッセージを確認してください。
-
-### サポート
-
-問題が解決しない場合は、以下の情報と共にサポートまでお問い合わせください：
-
-1. 実行したコマンド
-2. エラーメッセージ
-3. システム情報（OS、Python版数）
-4. データサイズ・メモリ使用量
 
 ## 📚 関連ドキュメント
 

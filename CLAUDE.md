@@ -38,57 +38,86 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Model Management
 ```bash
-# Create and train a new model
+# Comprehensive model management (recommended)
 cd model-creation
-python create_model.py --data-source sample --model-type rf
+./manage_model.sh train --model-type rf --data-source sample
+./manage_model.sh evaluate
+./manage_model.sh info
+./manage_model.sh backup current_model
 
-# Evaluate model performance
-python scripts/model_evaluator.py
+# Python model management
+python model_manager.py --action create --quick
+python model_manager.py --action compare --models model1,model2
+python model_manager.py --action status
 
-# Quick model creation (uses defaults)
-python scripts/quick_model.py
+# Test model accuracy with real estate scenarios
+python test_model_accuracy.py --endpoint http://localhost:8000 --test-scenarios all
 ```
 
 ### Deployment Commands
 ```bash
-# Unified deployment script (recommended)
+# Unified deployment (recommended - handles service dependencies)
 cd deployment
-./deploy_unified.sh [target] [service] [env]
-# Examples:
-./deploy_unified.sh aws both prod      # Deploy both services to AWS
-./deploy_unified.sh ecr api prod       # Deploy API via ECR (for large dependencies)
-./deploy_unified.sh local both         # Local Docker deployment
+./deploy_all.sh                       # Interactive deployment with environment selection
+./deploy_all.sh prod django           # Deploy Django to production
+./deploy_all.sh prod api              # Deploy API to production
+./deploy_all.sh prod both             # Deploy both services with proper sequencing
+
+# ECR container deployment (for ML dependencies)
+./ecr-deploy.sh api prod              # Deploy API via ECR container
 
 # Manual SAM deployment
 sam build -t lambda-api-light.yml
 sam deploy --stack-name satei-api-light --resolve-s3
 
+# Lambda layer management (for shared dependencies)
+./create-lambda-layer.sh
+
 # Check deployment status
 aws cloudformation describe-stacks --stack-name satei-api-light
+aws lambda list-functions --query "Functions[?contains(FunctionName, 'satei')].FunctionName"
 ```
 
 ### Testing
 ```bash
-# Run Django tests
+# Model accuracy testing with real estate scenarios
+cd model-creation
+python test_model_accuracy.py --endpoint http://localhost:8000 --test-scenarios all
+python test_model_accuracy.py --endpoint https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod --test-scenarios premium
+
+# Django application tests
 cd valuation-app
 python manage.py test valuation
 
-# Run API endpoint tests
+# API endpoint tests
 curl -X POST https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation \
   -H "Content-Type: application/json" \
   -d '{"prefecture":"東京都","city":"渋谷区","district":"恵比寿","land_area":100,"building_area":80,"building_age":10}'
 
-# Test local API
+# Test local development environment
 curl http://localhost:8000/api/valuation -X POST -H "Content-Type: application/json" \
   -d '{"prefecture":"東京都","city":"港区","district":"六本木","land_area":150,"building_area":120,"building_age":5}'
 ```
 
 ## High-Level Architecture
 
-### Service Dependencies
-The Django frontend depends on the FastAPI backend being available at the URL specified in `VALUATION_API_URL`. The deployment order matters:
+### Service Dependencies and Deployment Strategy
+The Django frontend depends on the FastAPI backend being available at the URL specified in `VALUATION_API_URL`. The `deploy_all.sh` script handles this complexity automatically:
+
+**Deployment Order (Automatic):**
 1. Deploy FastAPI first to get its URL
-2. Deploy Django with the FastAPI URL as a parameter
+2. Deploy Django with the FastAPI URL injected as environment variable
+3. Update Django configuration if FastAPI URL changes
+
+**Manual Environment Variable Management:**
+```bash
+# Check current Lambda environment variables
+aws lambda get-function-configuration --function-name satei-django-prod --query 'Environment.Variables'
+
+# Update Django Lambda to point to correct API
+aws lambda update-function-configuration --function-name satei-django-prod \
+  --environment Variables='{VALUATION_API_URL=https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod,...}'
+```
 
 ### Lambda Adaptation Pattern
 Both services use Mangum for ASGI-to-Lambda adaptation:
@@ -102,15 +131,21 @@ handler = Mangum(app, lifespan="off")
 ```
 
 ### Model Fallback Architecture
-The FastAPI service intelligently handles ML dependencies:
+The FastAPI service uses a simplified approach for Lambda deployment:
 ```python
-try:
-    from models.valuation_model import ValuationModel  # Full ML model
-except ImportError:
-    from models.lightweight_model import LightweightValuationModel  # Rule-based fallback
+# Currently simplified for Lambda (valuation-api/main.py)
+from models.lightweight_model import LightweightValuationModel
+valuation_model = LightweightValuationModel()
 ```
 
-This allows the same codebase to work in both local (with ML libraries) and Lambda (without ML libraries) environments.
+**Current State:** Uses only `LightweightValuationModel` (rule-based calculation)
+**Full Model Integration:** Available via model-creation scripts for local development
+
+**Model Management Workflow:**
+1. **Local Development:** Full ML models with scikit-learn, pandas
+2. **Lambda Deployment:** Lightweight model (4.5MB vs 113MB)
+3. **Model Training:** Managed via `model-creation/` directory scripts
+4. **Testing:** Real estate scenario validation with `test_model_accuracy.py`
 
 ### Lambda Configuration Adjustments
 Django automatically detects Lambda environment and adjusts:

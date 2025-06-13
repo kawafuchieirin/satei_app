@@ -26,7 +26,7 @@ Resources:
       Handler: lambda_main.lambda_handler
       Runtime: python3.11
       Timeout: 30
-      MemorySize: 256
+      MemorySize: 1024
       Environment:
         Variables:
           PYTHONPATH: /var/task
