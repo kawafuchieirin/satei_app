@@ -1,0 +1,36 @@
+{% extends 'valuation/base.html' %}
+
+{% block title %}不動産査定アプリ - ホーム{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="card-title">不動産査定アプリ</h1>
+                <p class="card-text lead">
+                    物件の基本情報を入力して、AIによる査定額を取得できます。
+                </p>
+                <a href="{% url 'valuation:form' %}" class="btn btn-primary btn-lg">査定を開始する</a>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>ご利用方法</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>物件の所在地（都道府県、市区町村、地区）を入力</li>
+                    <li>土地面積と建物面積を入力</li>
+                    <li>築年数を入力</li>
+                    <li>査定ボタンをクリック</li>
+                </ol>
+                <p class="text-muted small">
+                    ※ 査定結果は国土交通省の不動産取引価格情報を基にした参考値です。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

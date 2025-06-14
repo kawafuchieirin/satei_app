@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  django:
+    build: 
+      context: .
+      dockerfile: django_app/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - fastapi
+    volumes:
+      - ./valuation_core:/app/valuation_core:ro
+    networks:
+      - valuation_network
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: fastapi_app/Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./valuation_core:/app/valuation_core:ro
+      - ./model-creation/models:/app/models:ro
+    networks:
+      - valuation_network
+
+volumes:
+  models_data:
+
+networks:
+  valuation_network:
+    driver: bridge

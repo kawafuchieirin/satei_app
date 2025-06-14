@@ -60,6 +60,7 @@ response.json
 models/trained/
 
 # Data
+data/
 data/raw/
 data/processed/
 *.csv

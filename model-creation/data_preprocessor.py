@@ -32,39 +32,89 @@ class RealEstateDataPreprocessor:
         MLITデータから特徴量を準備
         """
         logger.info("Preparing features from raw data...")
+        logger.info(f"Input DataFrame columns: {list(df.columns)}")
+        logger.info(f"Input DataFrame shape: {df.shape}")
         
         # 必要な列の確認と作成
         features = pd.DataFrame()
         
-        # 基本情報 - サンプルデータの列名に合わせて修正
-        features['都道府県'] = df.get('prefecture', '東京都').fillna('東京都')
-        features['市区町村'] = df.get('city', '').fillna('')
-        features['地区名'] = df.get('district', '').fillna('不明')
+        # 基本情報 - 列の存在確認と適切な処理
+        if 'prefecture' in df.columns:
+            features['都道府県'] = df['prefecture'].fillna('東京都')
+        elif 'Prefecture' in df.columns:
+            features['都道府県'] = df['Prefecture'].fillna('東京都')
+        else:
+            features['都道府県'] = '東京都'
+            
+        if 'city' in df.columns:
+            features['市区町村'] = df['city'].fillna('')
+        elif 'Municipality' in df.columns:
+            features['市区町村'] = df['Municipality'].fillna('')
+        else:
+            features['市区町村'] = ''
+            
+        if 'district' in df.columns:
+            features['地区名'] = df['district'].fillna('不明')
+        elif 'DistrictName' in df.columns:
+            features['地区名'] = df['DistrictName'].fillna('不明')
+        else:
+            features['地区名'] = '不明'
         
-        # 数値特徴量 - サンプルデータの列名に合わせて修正
-        features['土地面積'] = pd.to_numeric(df.get('land_area', 0), errors='coerce').fillna(0)
-        features['建物面積'] = pd.to_numeric(df.get('building_area', 0), errors='coerce').fillna(0)
-        features['築年数'] = pd.to_numeric(df.get('building_age', 0), errors='coerce').fillna(0)
+        # 数値特徴量 - 列の存在確認と適切な処理
+        if 'land_area' in df.columns:
+            features['土地面積'] = pd.to_numeric(df['land_area'], errors='coerce').fillna(0)
+        elif 'Area' in df.columns:
+            features['土地面積'] = pd.to_numeric(df['Area'], errors='coerce').fillna(0)
+        else:
+            features['土地面積'] = 0
+            
+        if 'building_area' in df.columns:
+            features['建物面積'] = pd.to_numeric(df['building_area'], errors='coerce').fillna(0)
+        elif 'TotalFloorArea' in df.columns:
+            features['建物面積'] = pd.to_numeric(df['TotalFloorArea'], errors='coerce').fillna(0)
+        else:
+            features['建物面積'] = 0
+            
+        if 'building_age' in df.columns:
+            features['築年数'] = pd.to_numeric(df['building_age'], errors='coerce').fillna(0)
+        elif '築年数' in df.columns:
+            features['築年数'] = pd.to_numeric(df['築年数'], errors='coerce').fillna(0)
+        else:
+            # BuildingYearから築年数を計算
+            if 'BuildingYear' in df.columns:
+                current_year = pd.Timestamp.now().year
+                building_years = df['BuildingYear'].apply(self._convert_japanese_year_to_western)
+                features['築年数'] = (current_year - building_years).clip(lower=0).fillna(0)
+            else:
+                features['築年数'] = 0
         
-        # 建ぺい率・容積率（サンプルデータにない場合はデフォルト値）
+        # 建ぺい率・容積率（複数の列名パターンに対応）
         if '建ぺい率（％）' in df.columns:
             features['建ぺい率（％）'] = pd.to_numeric(df['建ぺい率（％）'], errors='coerce').fillna(60)
+        elif 'CoverageRatio' in df.columns:
+            features['建ぺい率（％）'] = pd.to_numeric(df['CoverageRatio'], errors='coerce').fillna(60)
         else:
             features['建ぺい率（％）'] = 60
         
         if '容積率（％）' in df.columns:
             features['容積率（％）'] = pd.to_numeric(df['容積率（％）'], errors='coerce').fillna(200)
+        elif 'FloorAreaRatio' in df.columns:
+            features['容積率（％）'] = pd.to_numeric(df['FloorAreaRatio'], errors='coerce').fillna(200)
         else:
             features['容積率（％）'] = 200
         
-        # 建物構造（サンプルデータにない場合はデフォルト値）
+        # 建物構造（複数の列名パターンに対応）
         if '建物の構造' in df.columns:
             features['建物の構造'] = df['建物の構造'].fillna('RC')
+        elif 'Structure' in df.columns:
+            features['建物の構造'] = df['Structure'].fillna('RC')
         else:
             features['建物の構造'] = 'RC'
             
         if '用途' in df.columns:
             features['用途'] = df['用途'].fillna('住宅')
+        elif 'Use' in df.columns:
+            features['用途'] = df['Use'].fillna('住宅')
         else:
             features['用途'] = '住宅'
         
@@ -80,16 +130,57 @@ class RealEstateDataPreprocessor:
         else:
             features['最寄駅距離'] = 10
         
-        # ターゲット変数 - サンプルデータの列名に合わせて修正
-        features['取引価格'] = pd.to_numeric(df.get('trade_price', 0), errors='coerce').fillna(0)
+        # ターゲット変数（価格）- 複数の列名パターンに対応
+        if 'trade_price' in df.columns:
+            features['取引価格'] = pd.to_numeric(df['trade_price'], errors='coerce').fillna(0)
+        elif 'TradePrice' in df.columns:
+            features['取引価格'] = pd.to_numeric(df['TradePrice'], errors='coerce').fillna(0)
+        elif '取引価格（総額）' in df.columns:
+            features['取引価格'] = pd.to_numeric(df['取引価格（総額）'], errors='coerce').fillna(0)
+        elif 'TradePrice_numeric' in df.columns:
+            features['取引価格'] = pd.to_numeric(df['TradePrice_numeric'], errors='coerce').fillna(0)
+        else:
+            # 価格列が見つからない場合はダミー値
+            features['取引価格'] = 0
+            logger.warning("Price column not found. Setting dummy values.")
         
-        # 価格の異常値を除外
-        features = features[features['取引価格'] > 0]
+        # 価格の異常値を除外（訓練時のみ）
+        if '取引価格' in features.columns and features['取引価格'].sum() > 0:
+            features = features[features['取引価格'] > 0]
+        
+        # 土地面積の異常値を除外
         features = features[features['土地面積'] > 0]
         
         logger.info(f"Features prepared: {len(features)} records")
         
         return features
+    
+    def _convert_japanese_year_to_western(self, japanese_year):
+        """
+        和暦を西暦に変換
+        """
+        if pd.isna(japanese_year) or japanese_year == '':
+            return pd.Timestamp.now().year
+        
+        try:
+            year_str = str(japanese_year)
+            # 令和の処理
+            if '令和' in year_str:
+                year_num = int(''.join(filter(str.isdigit, year_str)))
+                return 2019 + year_num - 1
+            # 平成の処理
+            elif '平成' in year_str:
+                year_num = int(''.join(filter(str.isdigit, year_str)))
+                return 1989 + year_num - 1
+            # 昭和の処理
+            elif '昭和' in year_str:
+                year_num = int(''.join(filter(str.isdigit, year_str)))
+                return 1926 + year_num - 1
+            # 既に西暦の場合
+            else:
+                return int(''.join(filter(str.isdigit, year_str)))
+        except:
+            return pd.Timestamp.now().year
     
     def preprocess(self, 
                   df: pd.DataFrame, 
@@ -277,16 +368,17 @@ if __name__ == "__main__":
     
     # サンプルデータの作成
     sample_data = pd.DataFrame({
-        '区': ['渋谷区', '新宿区', '港区'],
-        '地区名': ['恵比寿', '歌舞伎町', '六本木'],
-        '土地面積': [100, 120, 150],
-        '建物面積': [80, 100, 120],
-        '築年数': [10, 5, 15],
+        'prefecture': ['東京都', '東京都', '東京都'],
+        'city': ['渋谷区', '新宿区', '港区'],
+        'district': ['恵比寿', '歌舞伎町', '六本木'],
+        'land_area': [100, 120, 150],
+        'building_area': [80, 100, 120],
+        'building_age': [10, 5, 15],
         '建ぺい率（％）': [60, 70, 80],
         '容積率（％）': [200, 300, 400],
         '建物の構造': ['RC', 'SRC', 'RC'],
         '用途': ['住宅', '共同住宅', '住宅'],
-        '取引価格（総額）': [80000000, 120000000, 150000000]
+        'trade_price': [80000000, 120000000, 150000000]
     })
     
     # 特徴量の準備

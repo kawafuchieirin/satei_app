@@ -1,0 +1,17 @@
+{
+  "model_type": "random_forest",
+  "metrics": {
+    "mae": 12997169.466935249,
+    "rmse": 27642347.930312738,
+    "r2": 0.8278151641589075,
+    "mape": 21.011547892741742,
+    "best_params": {
+      "max_depth": null,
+      "min_samples_leaf": 2,
+      "min_samples_split": 2,
+      "n_estimators": 200
+    },
+    "cv_rmse": 29901869.155787304
+  },
+  "training_date": "2025-06-14T13:01:42.591941"
+}
