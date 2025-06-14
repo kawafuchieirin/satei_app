@@ -1,0 +1,34 @@
+{
+  "model_type": "Docker Compatible Random Forest",
+  "created_for": "NumPy 1.24.3, scikit-learn 1.3.2",
+  "features": 5,
+  "encoders": {
+    "municipalities": [
+      "渋谷区",
+      "新宿区",
+      "港区",
+      "中央区",
+      "千代田区",
+      "品川区",
+      "目黒区",
+      "世田谷区",
+      "大田区",
+      "江東区",
+      "文京区",
+      "台東区"
+    ],
+    "districts": [
+      "",
+      "1丁目",
+      "2丁目",
+      "3丁目",
+      "4丁目",
+      "5丁目",
+      "西",
+      "東",
+      "南",
+      "北"
+    ]
+  },
+  "notes": "Created to resolve numpy._core compatibility issues in Docker environment"
+}

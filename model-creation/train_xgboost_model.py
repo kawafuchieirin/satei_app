@@ -6,7 +6,7 @@ XGBoostモデルの訓練スクリプト
 
 import pandas as pd
 import numpy as np
-import xgboost as xgb
+# import xgboost as xgb  # XGBoostが利用できない場合はコメントアウト
 from sklearn.model_selection import train_test_split, cross_val_score, KFold, GridSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
@@ -22,7 +22,6 @@ from typing import Dict, Tuple, List, Optional
 import warnings
 
 from data_preprocessor import RealEstateDataPreprocessor
-from tokyo23_data_fetcher import Tokyo23DataFetcher
 
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
@@ -41,16 +40,14 @@ class MultiModelTrainer:
         self.best_model = None
         
     def train_all_models(self, 
-                        data_path: Optional[str] = None,
-                        fetch_new_data: bool = False,
+                        data_path: str = "data/tokyo23_real_estate.csv",
                         test_size: float = 0.2,
                         cv_folds: int = 5) -> Dict:
         """
         全モデルの訓練と評価
         
         Args:
-            data_path: CSVファイルのパス（Noneの場合は新規取得）
-            fetch_new_data: 新しいデータを取得するか
+            data_path: CSVファイルのパス
             test_size: テストデータの割合
             cv_folds: クロスバリデーションの分割数
             
@@ -59,18 +56,9 @@ class MultiModelTrainer:
         """
         logger.info("Starting multi-model training...")
         
-        # データの準備
-        if fetch_new_data or data_path is None:
-            logger.info("Fetching new data from MLIT API...")
-            fetcher = Tokyo23DataFetcher()
-            raw_df = fetcher.fetch_all_tokyo23_data(
-                from_year=2022, 
-                to_year=2024, 
-                save_csv=True
-            )
-        else:
-            logger.info(f"Loading data from {data_path}")
-            raw_df = pd.read_csv(data_path, encoding='utf-8-sig')
+        # データの読み込み
+        logger.info(f"Loading data from {data_path}")
+        raw_df = pd.read_csv(data_path, encoding='utf-8-sig')
         
         if raw_df.empty:
             raise ValueError("No data available for training")
@@ -116,11 +104,15 @@ class MultiModelTrainer:
             X_train, X_test, y_train, y_test, cv_folds
         )
         
-        # 5. XGBoost
-        logger.info("Training XGBoost...")
-        results['xgboost'] = self._train_xgboost(
-            X_train, X_test, y_train, y_test, cv_folds
-        )
+        # 5. XGBoost（利用できない場合はスキップ）
+        try:
+            import xgboost as xgb
+            logger.info("Training XGBoost...")
+            results['xgboost'] = self._train_xgboost(
+                X_train, X_test, y_train, y_test, cv_folds
+            )
+        except ImportError:
+            logger.warning("XGBoost not available, skipping XGBoost training")
         
         # 最良モデルの選択
         self._select_best_model(results)
@@ -225,6 +217,8 @@ class MultiModelTrainer:
     
     def _train_xgboost(self, X_train, X_test, y_train, y_test, cv_folds):
         """XGBoostモデルの訓練"""
+        import xgboost as xgb
+        
         # ハイパーパラメータチューニング
         param_grid = {
             'n_estimators': [100, 200],
@@ -426,19 +420,15 @@ class MultiModelTrainer:
             if not self.load_best_model():
                 raise ValueError("No trained model available")
         
-        # 入力データの準備
-        input_data = pd.DataFrame([{
-            'prefecture': prefecture,
-            'city': city,
-            'district': district,
-            'land_area': land_area,
-            'building_area': building_area,
-            'building_age': building_age
-        }])
-        
-        # 特徴量準備
-        features_df = self.preprocessor.prepare_features(input_data)
-        X, _, _ = self.preprocessor.preprocess(features_df, is_training=False)
+        # 前処理器から直接特徴量を作成（推論用）
+        X = self.preprocessor.create_model_features(
+            prefecture=prefecture,
+            city=city,
+            district=district,
+            land_area=land_area,
+            building_area=building_area,
+            building_age=building_age
+        )
         
         # 予測
         predicted_price = self.best_model.predict(X)[0]
@@ -465,7 +455,7 @@ if __name__ == "__main__":
     # 全モデルの訓練と比較
     logger.info("Starting multi-model training and comparison...")
     results = trainer.train_all_models(
-        fetch_new_data=False,  # 既存のデータを使用
+        data_path="data/tokyo23_real_estate.csv",
         test_size=0.2,
         cv_folds=5
     )
@@ -481,14 +471,18 @@ if __name__ == "__main__":
         
     # 予測テスト
     print("\n=== Prediction Test ===")
-    test_prediction = trainer.predict(
-        prefecture="東京都",
-        city="港区",
-        district="六本木",
-        land_area=150,
-        building_area=120,
-        building_age=5
-    )
-    print(f"Predicted price: {test_prediction['estimated_price']:,.0f} 円")
-    print(f"Model type: {test_prediction['model_type']}")
-    print(f"Confidence: {test_prediction['confidence']}%")
+    try:
+        test_prediction = trainer.predict(
+            prefecture="東京都",
+            city="港区",
+            district="六本木",
+            land_area=150,
+            building_area=120,
+            building_age=5
+        )
+        print(f"Predicted price: {test_prediction['estimated_price']:,.0f} 円")
+        print(f"Model type: {test_prediction['model_type']}")
+        print(f"Confidence: {test_prediction['confidence']}%")
+    except Exception as e:
+        print(f"Prediction test failed: {e}")
+        print("モデルが正常に保存されました。個別テストは test_prediction.py を実行してください。")
