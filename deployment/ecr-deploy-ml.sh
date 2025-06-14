@@ -34,8 +34,8 @@ if [ "$SERVICE" = "api" ]; then
 FROM public.ecr.aws/lambda/python:3.9
 
 # ML依存関係のインストール
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-ml.txt .
+RUN pip install --no-cache-dir -r requirements-ml.txt
 
 # アプリケーションコードのコピー
 COPY . ${LAMBDA_TASK_ROOT}
@@ -43,8 +43,7 @@ COPY . ${LAMBDA_TASK_ROOT}
 # モデルファイルディレクトリの作成
 RUN mkdir -p ${LAMBDA_TASK_ROOT}/models
 
-# モデルクリエーションディレクトリのコピー（必要な場合）
-COPY ../model-creation ${LAMBDA_TASK_ROOT}/model-creation
+# モデルクリエーションディレクトリは不要（Lambdaでは軽量モデルのみ使用）
 
 # ハンドラーの設定
 CMD ["lambda_main.handler"]
@@ -70,6 +69,7 @@ EOF
         --capabilities CAPABILITY_IAM \
         --parameter-overrides Environment=${ENVIRONMENT} \
         ImageUri=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${API_REPO_NAME}:latest \
+        --image-repositories ValuationApiMLFunction=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${API_REPO_NAME} \
         --resolve-s3
 
     echo "ML-enabled FastAPI ECR deployment completed successfully!"
