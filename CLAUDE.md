@@ -454,3 +454,27 @@ VALUATION_API_URL="https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/P
 - `MODEL_PATH`: "/var/task/models" (Lambda) or "./models" (local)
 - `ENABLE_ML`: "true" (ML version) or "false" (lightweight)
 - `LOG_LEVEL`: "INFO" (production) or "DEBUG" (development)
+
+## Resource Management Guidelines
+
+**⚠️ Critical**: When creating new code or resources, always delete previous unused resources to prevent:
+- AWS resource duplication and increased costs
+- CloudFormation stack conflicts
+- ECR repository capacity issues
+- Lambda function confusion from mixed deployments
+
+**Resources to clean up regularly**:
+- Unused CloudFormation stacks
+- Old ECR repositories and images
+- Test Lambda functions
+- Unnecessary CloudWatch log groups
+
+## Troubleshooting
+
+For detailed troubleshooting guide, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+
+**Common Issues**:
+- **403 Forbidden**: Switch to internal calculation mode
+- **0万円 Display**: Check price filter double conversion
+- **ECR Timeout**: Use lightweight deployment or Lambda Layers
+- **Lambda Not Found**: Verify CloudFormation stack status

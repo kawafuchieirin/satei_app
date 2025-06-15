@@ -6,12 +6,12 @@ register = template.Library()
 def format_price_yen(value):
     """
     価格を「X,XXX万円」形式で表示するフィルター
-    例: 39761889 → 3,976万円
+    注意: calculate_valuation()関数から返される値は既に万円単位
     """
     try:
         price = float(value)
-        # 万円単位に変換（四捨五入）
-        man_yen = round(price / 10000)
+        # 既に万円単位なので、カンマ区切りのみ追加
+        man_yen = round(price)
         # カンマ区切りでフォーマット
         return f"{man_yen:,}万円"
     except (ValueError, TypeError):

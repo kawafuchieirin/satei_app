@@ -3,16 +3,23 @@ import sys
 
 # プロジェクトルートをパスに追加 
 sys.path.insert(0, '/var/task')
+sys.path.insert(0, os.path.join('/var/task', 'satei_project'))
 
 # Django設定
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'satei_project.settings')
 
-import django
-from django.core.asgi import get_asgi_application
-from mangum import Mangum
-
-# Djangoの初期化
-django.setup()
+try:
+    import django
+    from django.core.asgi import get_asgi_application
+    from mangum import Mangum
+    
+    # Djangoの初期化
+    django.setup()
+    print("Django setup completed successfully")
+except ImportError as e:
+    print(f"ImportError during Django setup: {e}")
+    print(f"Python path: {sys.path}")
+    raise
 
 # ASGIアプリケーション（Mangum用）
 django_app = get_asgi_application()

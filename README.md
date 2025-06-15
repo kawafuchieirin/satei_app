@@ -39,7 +39,6 @@ ML モデルの作成・管理ツール
 **現在の本番環境**：
 - **Webアプリケーション（Django）**: https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/
 - **査定API（FastAPI）**: https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod/
-- **査定機能**: FastAPI バックエンドサービス（ルールベース計算）
 
 ## 概要
 
@@ -254,6 +253,24 @@ python model-creation/quick_model.py
 ## 免責事項
 
 本査定結果は参考値であり、実際の不動産価値を保証するものではありません。実際の売買価格は市場状況、物件の状態、立地条件等により変動する可能性があります。正確な査定については、不動産専門業者にご相談ください。
+
+## ⚠️ 重要な開発ガイドライン
+
+### リソース管理規則
+
+**新規コードやリソースを作成する際は、必ず前回の不要なリソースを削除してください。**
+
+これにより以下を防ぎます：
+- AWS リソースの重複による料金増加
+- CloudFormation スタックの競合
+- ECR リポジトリの容量圧迫
+- Lambda 関数の混在による混乱
+
+**削除対象の例**：
+- 未使用の CloudFormation スタック
+- 古い ECR リポジトリとイメージ
+- テスト用 Lambda 関数
+- 不要な CloudWatch ログ群
 
 ## ライセンス
 
