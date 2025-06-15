@@ -1,0 +1,47 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-1
+        
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+      
+    - name: Deploy FastAPI
+      run: |
+        cd deployment/aws
+        ./deploy_all.sh api prod
+        
+    - name: Deploy Django
+      run: |
+        cd deployment/aws
+        ./deploy_all.sh django prod
+        
+    - name: Test deployed endpoints
+      run: |
+        # Test FastAPI health
+        curl -f https://25cfdqih7a.execute-api.ap-northeast-1.amazonaws.com/Prod/health || exit 1
+        
+        # Test Django health
+        curl -f https://imi1rg1eyc.execute-api.ap-northeast-1.amazonaws.com/Prod/ || exit 1
+        
+        # Test valuation endpoint
+        curl -f -X POST https://25cfdqih7a.execute-api.ap-northeast-1.amazonaws.com/Prod/api/valuation \
+          -H "Content-Type: application/json" \
+          -d '{"prefecture":"東京都","city":"港区","land_area":100,"building_area":80,"building_age":10}' || exit 1

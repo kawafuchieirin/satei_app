@@ -1,0 +1,14 @@
+{
+  "numpy": "2.3.0",
+  "pandas": "2.3.0",
+  "sklearn": "1.7.0",
+  "model_type": "RandomForestRegressor (Optimized)",
+  "n_estimators": 50,
+  "max_depth": 20,
+  "model_size_mb": 4.080201148986816,
+  "train_time_sec": 0.3884391784667969,
+  "load_time_sec": 0.03634500503540039,
+  "r2_score": 0.8066312536933263,
+  "rmse": 39723844.374241956,
+  "mae": 21166218.424141426
+}

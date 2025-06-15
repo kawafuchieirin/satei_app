@@ -1,0 +1,9 @@
+{
+  "numpy": "1.24.3",
+  "pandas": "2.0.3",
+  "sklearn": "1.3.2",
+  "model_type": "RandomForestRegressor",
+  "r2_score": 0.7930459219316359,
+  "rmse": 41095581.05530079,
+  "mae": 21445492.614762515
+}

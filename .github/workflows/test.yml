@@ -1,0 +1,93 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-django:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./django_app
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run Django tests
+      run: |
+        python manage.py test valuation
+
+  test-fastapi:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./fastapi_app
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Test API endpoints
+      run: |
+        # Start FastAPI in background
+        python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:8000/health || exit 1
+        
+        # Test valuation endpoint
+        curl -f -X POST http://localhost:8000/api/valuation \
+          -H "Content-Type: application/json" \
+          -d '{"prefecture":"東京都","city":"港区","land_area":100,"building_area":80,"building_age":10}' || exit 1
+
+  test-models:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./model-creation
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Test model training
+      run: |
+        # Test data preprocessing
+        python data_preprocessor.py --test
+        
+        # Test model evaluation (if available)
+        if [ -f "test_model_accuracy.py" ]; then
+          python test_model_accuracy.py
+        fi
