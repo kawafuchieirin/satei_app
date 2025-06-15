@@ -15,12 +15,12 @@ def deploy_model_to_api():
     
     # パス設定
     model_dir = Path('models')
-    api_dir = Path('../valuation-api')
-    api_ml_dir = Path('../valuation-api-ml')
+    api_dir = Path('../fastapi_app')
+    api_ml_dir = Path('../fastapi_app')
     
     # 必要なファイル
     files_to_copy = [
-        'trained_model.joblib',  # 或いは 'quick_model.joblib'
+        'best_model.joblib',  # XGBoostモデル (Lambda互換)
         'label_encoders.joblib',
         'scaler.joblib',
         'feature_columns.joblib'
@@ -41,7 +41,7 @@ def deploy_model_to_api():
             
             if src_file.exists():
                 # メインモデルは valuation_model.joblib として保存
-                if file_name in ['trained_model.joblib', 'quick_model.joblib']:
+                if file_name == 'best_model.joblib':
                     dst_file = target_dir / 'valuation_model.joblib'
                 else:
                     dst_file = target_dir / file_name
@@ -63,8 +63,7 @@ def check_api_model_status():
     """APIディレクトリのモデルファイル状態をチェック"""
     
     api_dirs = [
-        Path('../valuation-api'),
-        Path('../valuation-api-ml')
+        Path('../fastapi_app')
     ]
     
     for api_dir in api_dirs:

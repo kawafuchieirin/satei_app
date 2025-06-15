@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy Django application
 COPY django_app/ .
 
-# Copy valuation_core from parent directory
-COPY valuation_core /app/valuation_core
-
 # Create static files directory
 RUN mkdir -p /app/static
 

@@ -27,8 +27,12 @@ SECRET_KEY = 'django-insecure-3&*l3nm@por25vjtki_ytym7c+s&l1)zz(+q2xak+iukn42#b0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-# Lambda環境用の設定
+# Lambda統合環境用の設定
 ALLOWED_HOSTS = ['*']  # Lambda + API Gateway用
+
+# FastAPI統合用設定
+FORCE_SCRIPT_NAME = '/django'  # FastAPIマウント用
+USE_TZ = True
 
 
 # Application definition

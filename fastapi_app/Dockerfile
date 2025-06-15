@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir -r requirements-ml.txt
 # Copy FastAPI application
 COPY fastapi_app/ .
 
-# Copy valuation_core from parent directory
-COPY valuation_core /app/valuation_core
-
 # Copy ML model files from model-creation
 COPY model-creation/models/*.joblib /app/models/
 

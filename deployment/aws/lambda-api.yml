@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Real Estate Valuation API - Lightweight Version
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 300  # 5分（XGBoostモデル対応）
+    MemorySize: 2048  # 2GB（XGBoostモデル対応）
+    Runtime: python3.11
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        LOG_LEVEL: INFO
+
+Resources:
+  ValuationApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub satei-api-light-${Environment}
+      CodeUri: ../../fastapi_app/
+      Handler: lambda_main.handler
+      Environment:
+        Variables:
+          MODEL_PATH: /var/task/models
+          ENABLE_ML: "true"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        RootApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+
+  # API Gateway のログ設定
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/satei-api-light-${Environment}
+      RetentionInDays: 30
+
+  # Lambda関数のログ設定
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/satei-api-light-${Environment}
+      RetentionInDays: 30
+
+Outputs:
+  ValuationApi:
+    Description: API Gateway endpoint URL for Valuation API
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+  
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ValuationApiFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn

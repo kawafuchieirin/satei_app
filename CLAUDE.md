@@ -56,6 +56,7 @@ This is a microservices-based real estate valuation application for Tokyo's 23 w
 #### 🐳 Docker Compose 環境 (推奨)
 ```bash
 # 統合開発環境（Django + FastAPI）
+cd deployment/local
 docker-compose up --build -d
 
 # アクセス
@@ -72,11 +73,11 @@ docker-compose down
 #### 🔧 個別起動 (レガシー)
 ```bash
 # Run Django development server only
-cd valuation-app
+cd django_app
 python manage.py runserver 0.0.0.0:8080
 
 # Run FastAPI development server only  
-cd valuation-api-ml
+cd fastapi_app
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -93,7 +94,7 @@ python tokyo23_data_fetcher.py              # MLIT APIから最新データ取�
 python train_xgboost_model.py               # XGBoost + Random Forest + 線形回帰の比較訓練
 
 # 訓練済みモデルをAPIに統合
-python deploy_model.py                      # models/ → valuation-api-ml/
+python deploy_model.py                      # models/ → fastapi_app/
 ```
 
 #### Model Performance Benchmarks
@@ -124,7 +125,7 @@ curl -X POST https://25cfdqih7a.execute-api.ap-northeast-1.amazonaws.com/Prod/ap
 
 #### Unified Deployment (推奨)
 ```bash
-cd deployment
+cd deployment/aws
 ./deploy_all.sh both prod             # Django + 軽量API の同時デプロイ
 ./deploy_all.sh api prod              # 軽量API のみ
 ./deploy_all.sh django prod           # Django のみ
@@ -132,7 +133,7 @@ cd deployment
 
 #### ML対応ECRデプロイ（本格運用向け）
 ```bash
-cd deployment
+cd deployment/aws
 ./ecr-deploy-ml.sh api prod           # ML完全版APIをECRコンテナでデプロイ
                                        # - 3GB RAM, 5分タイムアウト
                                        # - 118.8MB訓練済みモデル搭載
@@ -142,7 +143,8 @@ cd deployment
 #### レガシー個別デプロイ
 ```bash
 # 軽量版（現在の本番環境）
-sam build -t lambda-api-light.yml
+cd deployment/aws
+sam build -t lambda-api.yml
 sam deploy --stack-name satei-api-light --resolve-s3
 
 # Lambda Layer管理
@@ -166,7 +168,7 @@ curl https://25cfdqih7a.execute-api.ap-northeast-1.amazonaws.com/Prod/     # ML�
 ### Testing
 ```bash
 # Django application tests
-cd valuation-app
+cd django_app
 python manage.py test valuation
 
 # API endpoint tests (note: district parameter is optional)
@@ -177,6 +179,24 @@ curl -X POST https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/Prod/ap
 # Test local environment
 curl http://localhost:8000/api/valuation -X POST -H "Content-Type: application/json" \
   -d '{"prefecture":"東京都","city":"港区","land_area":150,"building_area":120,"building_age":5}'
+```
+
+### CI/CD with GitHub Actions
+
+#### Automated Testing
+```bash
+# Tests run automatically on push/PR to main branch
+# - Django unit tests
+# - FastAPI endpoint tests  
+# - Model validation tests
+```
+
+#### Automated Deployment
+```bash
+# Production deployment on main branch push
+# - FastAPI Lambda deployment
+# - Django Lambda deployment
+# - Endpoint validation tests
 ```
 
 ## High-Level Architecture
@@ -232,7 +252,7 @@ handler = Mangum(app, lifespan="off")
 **Model Files & Performance:**
 ```bash
 # 統合済みモデルファイル
-valuation-api-ml/
+fastapi_app/
 ├── valuation_model.joblib      # 118.8MB (Random Forest/XGBoost)
 ├── label_encoders.joblib       # 0.04MB (カテゴリエンコーダー)
 ├── scaler.joblib              # 0.001MB (数値正規化)
@@ -265,7 +285,7 @@ Django automatically detects Lambda environment and adjusts:
 
 **Model Loading & Inference:**
 ```python
-# valuation-api/models/lightweight_model.py
+# fastapi_app/models/lightweight_model.py
 class LightweightValuationModel:
     def __init__(self):
         self._try_load_ml_model()  # Dynamic import for Lambda safety
@@ -328,10 +348,10 @@ python tokyo23_data_fetcher.py
 python train_xgboost_model.py       # XGBoost最高性能: R² = 0.8474
 
 # 3. API統合
-python deploy_model.py              # → valuation-api/ & valuation-api-ml/
+python deploy_model.py              # → fastapi_app/
 
 # 4. 軽量版デプロイ (現在の本番)
-cd ../deployment
+cd ../deployment/aws
 ./deploy_all.sh api prod
 
 # 5. ML完全版デプロイ (将来の本番)
@@ -382,43 +402,6 @@ HTTP 422: {"detail": "入力データが無効です: 土地面積は正の数�
 # Response (システムエラー時)
 HTTP 500: {"detail": "システムエラーが発生しました。しばらくしてから再度お試しください"}
 ```
-
-### Valuation Logic & Error Handling
-
-**Random Forest/XGBoost MLモデル専用査定:**
-```python
-# MLモデルによる査定のみ
-def _ml_predict(self, prefecture, city, land_area, building_area, building_age, district):
-    # 1. 特徴量エンコーディング
-    input_data = pd.DataFrame({
-        'prefecture': [prefecture], 'city': [city], 'district': [district],
-        'land_area': [land_area], 'building_area': [building_area], 
-        'building_age': [building_age]
-    })
-    
-    # 2. カテゴリカル変数の数値化
-    for col in ['prefecture', 'city', 'district']:
-        input_data[f'{col}_encoded'] = self.ml_encoders[col].transform(input_data[col])
-    
-    # 3. 派生特徴量の生成
-    input_data['total_area'] = input_data['land_area'] + input_data['building_area']
-    input_data['building_ratio'] = input_data['building_area'] / (input_data['land_area'] + 1)
-    
-    # 4. Random Forest/XGBoostによる予測
-    predicted_price = self.ml_model.predict(X)[0]
-    
-    return predicted_price
-
-# エラー処理: MLモデル利用不可時は例外発生
-if not self.ml_available:
-    raise RuntimeError("査定できませんでした。MLモデルが利用できません。")
-```
-
-**厳格なエラーハンドリング:**
-- **MLモデル必須**: Random Forest/XGBoostモデルが利用できない場合は503エラー
-- **入力バリデーション**: 必須フィールド、数値範囲、東京23区チェック
-- **No Fallback**: ルールベース査定は実装せず、MLモデル専用動作
-- **詳細ログ**: MLモデルの読み込み状況、予測エラーをCloudWatchに記録
 
 ### Package Size & Dependency Management
 
@@ -471,49 +454,3 @@ VALUATION_API_URL="https://tal7iqok0h.execute-api.ap-northeast-1.amazonaws.com/P
 - `MODEL_PATH`: "/var/task/models" (Lambda) or "./models" (local)
 - `ENABLE_ML`: "true" (ML version) or "false" (lightweight)
 - `LOG_LEVEL`: "INFO" (production) or "DEBUG" (development)
-
-## Docker Compose 統合開発環境
-
-### ディレクトリ構成
-```bash
-satei_app/
-├── docker-compose.yml          # マルチコンテナ環境定義
-├── .env                        # 環境変数設定
-├── valuation_core/             # 🔥 共通MLモジュール
-│   ├── __init__.py
-│   └── ml_predictor.py         # Django・FastAPI統一ロジック
-├── django_app/                 # Django UI (Port 8000)
-│   ├── Dockerfile
-│   └── (Django application)
-├── fastapi_app/                # FastAPI ML API (Port 8001)  
-│   ├── Dockerfile
-│   ├── main_shared.py          # 共通MLPredictor使用版
-│   └── (FastAPI application)
-└── model-creation/models/      # MLモデルファイル共有
-    ├── valuation_model.joblib  # 4.1MB最適化Random Forest
-    ├── label_encoders.joblib   # カテゴリエンコーダー
-    └── scaler.joblib          # 特徴量スケーラー
-```
-
-### 開発環境の利点
-1. **本番同等ロジック**: AWS LambdaとローカルでMLロジック統一
-2. **開発効率向上**: Hot reload、独立スケーリング
-3. **テスト容易性**: 完全なE2E環境での検証
-4. **ゼロ設定Gap**: 本番とローカルの査定結果差分ゼロ
-
-### 検証コマンド
-```bash
-# 環境起動
-docker-compose up --build -d
-
-# 査定API直接テスト
-curl -X POST http://localhost:8001/api/valuation \
-  -H "Content-Type: application/json" \
-  -d '{"prefecture":"東京都","city":"渋谷区","land_area":100,"building_area":80,"building_age":10}'
-
-# Django経由のE2Eテスト
-curl http://localhost:8000/test-api/
-
-# ヘルスチェック
-curl http://localhost:8001/health
-```

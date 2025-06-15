@@ -76,7 +76,7 @@ class LightweightValuationModel:
                 load_time = time.time() - start_time
                 self.ml_available = True
                 self.is_trained = True
-                logger.info(f"ML model (Optimized Random Forest) loaded successfully in {load_time:.2f}s")
+                logger.info(f"ML model (XGBoost) loaded successfully in {load_time:.2f}s")
             else:
                 logger.error("ML model files not found")
                 self.ml_available = False
@@ -165,10 +165,13 @@ class LightweightValuationModel:
             else:
                 logger.warning("Scaler is None, using raw features")
             
-            # Random Forest/XGBoostによる予測実行
-            predicted_price = self.ml_model.predict(X)[0]
+            # XGBoostによる予測実行
+            predicted_price_man = self.ml_model.predict(X)[0]
             
-            logger.info(f"ML prediction (Random Forest/XGBoost): ¥{predicted_price:,.0f}")
+            # 万円から円に変換
+            predicted_price = predicted_price_man * 10000
+            
+            logger.info(f"ML prediction (XGBoost): ¥{predicted_price:,.0f}")
             return predicted_price
             
         except HTTPException:
@@ -202,8 +205,8 @@ class LightweightValuationModel:
                 'max': estimated_price * 1.15
             }
             
-            # 査定要因分析（ML専用）
-            factors = ["機械学習モデルによる高精度予測", "最適化Random Forest アルゴリズム使用", "63,217件の実取引データで訓練"]
+            # 査定要因分析（XGBoost専用）
+            factors = ["機械学習モデルによる高精度予測", "XGBoost アルゴリズム使用（R²=0.82）", "63,217件の実取引データで訓練"]
             
             if building_age <= 5:
                 factors.append("築浅物件で、価格にプラス影響")

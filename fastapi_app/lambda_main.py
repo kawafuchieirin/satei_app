@@ -8,6 +8,6 @@ from main import app
 # Lambda用のハンドラー
 handler = Mangum(app, lifespan="off")
 
-# Lambda関数のエントリーポイント
+# ECR Lambdaのエントリーポイント（ダブル名前付け対応）
 def lambda_handler(event, context):
     return handler(event, context)

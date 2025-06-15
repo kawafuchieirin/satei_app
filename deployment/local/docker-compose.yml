@@ -1,0 +1,31 @@
+services:
+  django:
+    build: 
+      context: ../../
+      dockerfile: django_app/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - VALUATION_API_URL=http://fastapi:8001
+    depends_on:
+      - fastapi
+    networks:
+      - valuation_network
+
+  fastapi:
+    build:
+      context: ../../
+      dockerfile: fastapi_app/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../../model-creation/models:/app/models:ro
+    networks:
+      - valuation_network
+
+volumes:
+  models_data:
+
+networks:
+  valuation_network:
+    driver: bridge

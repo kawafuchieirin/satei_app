@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  django:
+    build:
+      context: ../../
+      dockerfile: django_app/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - VALUATION_API_URL=http://fastapi:8001
+      - DEBUG=False
+      - ENVIRONMENT=production
+    networks:
+      - satei-network
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  fastapi:
+    build:
+      context: ../../
+      dockerfile: fastapi_app/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - MODEL_PATH=/app/models
+      - ENABLE_ML=true
+      - ENVIRONMENT=production
+    volumes:
+      - ../../model-creation/models:/app/models:ro
+    networks:
+      - satei-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  satei-network:
+    driver: bridge
